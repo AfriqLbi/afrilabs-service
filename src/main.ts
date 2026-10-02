@@ -3,6 +3,7 @@ import { ValidationPipe, VersioningType } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { json, urlencoded } from "express";
+import * as cookieParser from "cookie-parser";
 import { AppModule } from "./app.module";
 import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
 import { TransformInterceptor } from "./common/interceptors/transform.interceptor";
@@ -18,15 +19,21 @@ async function bootstrap() {
   });
 
   // Register body parsers with a 10 MB ceiling BEFORE all other middleware.
-  // rawBody still works because NestJS captures it internally before these parsers.
   app.use(json({ limit: "10mb" }));
   app.use(urlencoded({ limit: "10mb", extended: true }));
+  app.use(cookieParser());
 
   const config = app.get(ConfigService);
   const port = config.get<number>("PORT", 4000);
-  const clientOrigin = config.get<string>("CLIENT_ORIGIN", "http://localhost:3000");
+  const clientOrigin = config.get<string>(
+    "CLIENT_ORIGIN",
+    "http://localhost:3000",
+  );
   const nodeEnv = config.get<string>("NODE_ENV", "development");
-  const storefrontUrl = config.get<string>("STOREFRONT_URL", "http://localhost:3000");
+  const storefrontUrl = config.get<string>(
+    "STOREFRONT_URL",
+    "http://localhost:3000",
+  );
 
   // ── CORS ─────────────────────────────────────────────────────────────────────
   app.enableCors({
@@ -58,7 +65,8 @@ async function bootstrap() {
 
   // ── Swagger / OpenAPI ────────────────────────────────────────────────────────
   const swaggerEnabled =
-    nodeEnv !== "production" || config.get<string>("SWAGGER_ENABLED", "false") === "true";
+    nodeEnv !== "production" ||
+    config.get<string>("SWAGGER_ENABLED", "false") === "true";
 
   if (swaggerEnabled) {
     const swaggerConfig = new DocumentBuilder()
@@ -157,7 +165,10 @@ All routes are prefixed with \`/v1/\`.`,
   const httpAdapter = app.getHttpAdapter();
   httpAdapter.get(
     "/health",
-    (_req: unknown, res: { status: (code: number) => { json(body: unknown): void } }) => {
+    (
+      _req: unknown,
+      res: { status: (code: number) => { json(body: unknown): void } },
+    ) => {
       res.status(200).json({
         status: "ok",
         version: "1.0.0",
