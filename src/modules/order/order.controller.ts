@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from "@nestjs/common";
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -7,12 +16,17 @@ import {
   ApiNotFoundResponse,
   ApiBadRequestResponse,
   ApiForbiddenResponse,
+  ApiBody,
 } from "@nestjs/swagger";
-import { IsEnum, IsOptional } from "class-validator";
+import { IsEnum, IsOptional, IsString, MaxLength } from "class-validator";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { OrderService } from "./order.service";
 import { CreateOrderDto } from "./dto/create-order.dto";
 import { OrderStatus } from "./schemas/order.schema";
-import { JwtAuthGuard, OptionalJwtAuthGuard } from "../../common/guards/jwt-auth.guard";
+import {
+  JwtAuthGuard,
+  OptionalJwtAuthGuard,
+} from "../../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
@@ -28,8 +42,33 @@ import { OrderResponseDto } from "../../common/swagger/swagger-response.dto";
 
 class AdminOrderQueryDto extends PaginationDto {
   @IsOptional()
-  @IsEnum(["pending_payment", "paid", "failed", "abandoned", "fulfilled", "cancelled", "refunded"])
+  @IsEnum([
+    "pending_payment",
+    "paid",
+    "failed",
+    "abandoned",
+    "fulfilled",
+    "cancelled",
+    "refunded",
+  ])
   status?: OrderStatus;
+}
+
+class UpdateProductionStageDto {
+  @ApiProperty({
+    enum: ["cutting", "sewing", "quality_check", "ready", "delivered"],
+    example: "sewing",
+    description:
+      "Production stage to advance to. Must be forward of the current stage.",
+  })
+  @IsEnum(["cutting", "sewing", "quality_check", "ready", "delivered"])
+  stage: "cutting" | "sewing" | "quality_check" | "ready" | "delivered";
+
+  @ApiPropertyOptional({ example: "Fabric cut and prepped.", maxLength: 500 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  note?: string;
 }
 
 // ─── Customer-facing ──────────────────────────────────────────────────────────
@@ -50,7 +89,10 @@ export class OrderController {
     description: "Cart is empty / validation error",
     type: ApiErrorResponse,
   })
-  createOrder(@Body() dto: CreateOrderDto, @CurrentUser() user: JwtPayload | undefined) {
+  createOrder(
+    @Body() dto: CreateOrderDto,
+    @CurrentUser() user: JwtPayload | undefined,
+  ) {
     return this.orderService.createOrder(dto, user?.sub ?? null);
   }
 
@@ -59,7 +101,10 @@ export class OrderController {
   @Get("mine")
   @ApiOperation({ summary: "Get order history for the current customer" })
   @ApiPaginatedOk(OrderResponseDto)
-  myOrders(@CurrentUser() user: JwtPayload, @Query() pagination: PaginationDto) {
+  myOrders(
+    @CurrentUser() user: JwtPayload,
+    @Query() pagination: PaginationDto,
+  ) {
     return this.orderService.findByCustomer(user.sub, pagination);
   }
 
@@ -69,7 +114,10 @@ export class OrderController {
   @ApiOperation({ summary: "Get a single order by id" })
   @ApiParam({ name: "id", description: "Order ObjectId" })
   @ApiEnvelopeOk(OrderResponseDto)
-  @ApiNotFoundResponse({ description: "Order not found", type: ApiErrorResponse })
+  @ApiNotFoundResponse({
+    description: "Order not found",
+    type: ApiErrorResponse,
+  })
   getOrder(@Param("id") id: string) {
     return this.orderService.findById(id);
   }
@@ -82,7 +130,10 @@ export class OrderController {
 @Controller({ path: "admin/orders", version: "1" })
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles("super_admin", "support_agent")
-@ApiForbiddenResponse({ description: "Insufficient role", type: ApiErrorResponse })
+@ApiForbiddenResponse({
+  description: "Insufficient role",
+  type: ApiErrorResponse,
+})
 export class AdminOrderController {
   constructor(private readonly orderService: OrderService) {}
 
@@ -100,7 +151,10 @@ export class AdminOrderController {
   @ApiOperation({ summary: "[Admin] Get a single order" })
   @ApiParam({ name: "id", description: "Order ObjectId" })
   @ApiEnvelopeOk(OrderResponseDto)
-  @ApiNotFoundResponse({ description: "Order not found", type: ApiErrorResponse })
+  @ApiNotFoundResponse({
+    description: "Order not found",
+    type: ApiErrorResponse,
+  })
   getOrder(@Param("id") id: string) {
     return this.orderService.findById(id);
   }
@@ -129,5 +183,40 @@ export class AdminOrderController {
   })
   cancel(@Param("id") id: string) {
     return this.orderService.markCancelled(id);
+  }
+
+  /**
+   * Update the production stage for a standard catalog order.
+   * Available to super_admin, merchandiser, and staff roles.
+   * Writes to the production_logs collection AND syncs the denormalized
+   * productionStage field on the Order document.
+   */
+  @Patch(":id/production-stage")
+  @Roles("super_admin", "merchandiser", "staff")
+  @ApiOperation({
+    summary: "[Admin/Staff] Update production stage for a standard order",
+    description:
+      "Appends a production log entry and syncs the denormalized productionStage field. " +
+      "Stages must advance forward: cutting → sewing → quality_check → ready → delivered.",
+  })
+  @ApiParam({ name: "id", description: "Order ObjectId" })
+  @ApiBody({ type: UpdateProductionStageDto })
+  @ApiEnvelopeOk(OrderResponseDto)
+  @ApiBadRequestResponse({
+    description: "Stage regression attempt",
+    type: ApiErrorResponse,
+  })
+  updateProductionStage(
+    @Param("id") id: string,
+    @Body() dto: UpdateProductionStageDto,
+    @CurrentUser() actor: JwtPayload,
+  ) {
+    return this.orderService.updateProductionStage(
+      id,
+      dto.stage,
+      actor.sub,
+      actor.email,
+      dto.note,
+    );
   }
 }

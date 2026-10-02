@@ -31,9 +31,22 @@ export class Category {
 
   @Prop({ default: 0 })
   sortOrder: number;
+
+  /**
+   * Distinguishes browseable product categories from admin-curated storefront
+   * sections (e.g. "New Arrivals", "Bridal", "Aso-Ebi").
+   * Added for Labi fashion platform; default "category" keeps all pre-existing
+   * electronics categories valid without a data migration.
+   */
+  @Prop({
+    type: String,
+    enum: ["category", "section"],
+    default: "category",
+  })
+  type: "category" | "section";
 }
 
 export const CategorySchema = SchemaFactory.createForClass(Category);
 // slug: unique index already created by unique: true in @Prop
-// parentId: plain index (not expressible as sparse/compound via @Prop)
 CategorySchema.index({ parentId: 1 });
+CategorySchema.index({ type: 1, sortOrder: 1 }); // for /v1/catalog/categories?type=section

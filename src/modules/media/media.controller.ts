@@ -22,7 +22,10 @@ import { MediaService } from "./media.service";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { Roles } from "../../common/decorators/roles.decorator";
-import { ApiEnvelopeOk, ApiErrorResponse } from "../../common/swagger/api-response.decorator";
+import {
+  ApiEnvelopeOk,
+  ApiErrorResponse,
+} from "../../common/swagger/api-response.decorator";
 import {
   SignedUploadParamsDto,
   UploadResponseDto,
@@ -40,18 +43,24 @@ class SignedUploadQueryDto {
 @Controller({ path: "admin/media", version: "1" })
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles("super_admin", "merchandiser")
-@ApiForbiddenResponse({ description: "Insufficient role", type: ApiErrorResponse })
+@ApiForbiddenResponse({
+  description: "Insufficient role",
+  type: ApiErrorResponse,
+})
 export class MediaController {
   constructor(private readonly mediaService: MediaService) {}
 
   @Get("sign")
   @ApiOperation({
-    summary: "Get signed upload parameters for direct browser → Cloudinary upload",
+    summary:
+      "Get signed upload parameters for direct browser → Cloudinary upload",
     description: `Returns a pre-signed credential set. Use the \`signature\`, \`timestamp\`, \`apiKey\`, and \`cloudName\` with the Cloudinary Upload Widget or SDK to upload files directly from the browser without routing large files through this API. Signature expires in ~1 minute.`,
   })
   @ApiEnvelopeOk(SignedUploadParamsDto)
   getSignedParams(@Query() query: SignedUploadQueryDto) {
-    return this.mediaService.generateSignedUploadParams(query.folder ?? "alphavista/products");
+    return this.mediaService.generateSignedUploadParams(
+      query.folder ?? "alphavista/products",
+    );
   }
 
   @Post("upload")
@@ -66,7 +75,11 @@ export class MediaController {
       type: "object",
       required: ["file"],
       properties: {
-        file: { type: "string", format: "binary", description: "Image file (max 10 MB)" },
+        file: {
+          type: "string",
+          format: "binary",
+          description: "Image file (max 10 MB)",
+        },
       },
     },
   })
@@ -82,7 +95,15 @@ export class MediaController {
       },
     }),
   )
-  uploadFile(@UploadedFile() file: Express.Multer.File) {
+  uploadFile(
+    @UploadedFile()
+    file: {
+      buffer: Buffer;
+      mimetype: string;
+      originalname: string;
+      size: number;
+    },
+  ) {
     return this.mediaService.uploadBuffer(file.buffer, "alphavista/products");
   }
 }

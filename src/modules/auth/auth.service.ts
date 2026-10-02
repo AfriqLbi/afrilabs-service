@@ -36,6 +36,7 @@ export class AuthService {
       email: dto.email,
       passwordHash,
       role: "customer",
+      phone: dto.phone ?? null,
     });
 
     return this.issueTokenPair(user);
@@ -63,9 +64,12 @@ export class AuthService {
   // ─── Refresh ─────────────────────────────────────────────────────────────────
 
   async refreshTokens(userId: string, refreshToken: string) {
-    const user = await this.userModel.findById(userId).select("+refreshTokenHash");
+    const user = await this.userModel
+      .findById(userId)
+      .select("+refreshTokenHash");
 
-    if (!user?.refreshTokenHash) throw new UnauthorizedException("No active session");
+    if (!user?.refreshTokenHash)
+      throw new UnauthorizedException("No active session");
 
     const matches = await bcrypt.compare(refreshToken, user.refreshTokenHash);
     if (!matches) throw new UnauthorizedException("Invalid refresh token");
@@ -83,7 +87,9 @@ export class AuthService {
 
   // ─── Admin: create user ───────────────────────────────────────────────────────
 
-  async createAdminUser(dto: RegisterDto & { role: UserRole }): Promise<UserDocument> {
+  async createAdminUser(
+    dto: RegisterDto & { role: UserRole },
+  ): Promise<UserDocument> {
     const exists = await this.userModel.exists({ email: dto.email });
     if (exists) throw new ConflictException("Email already registered");
 

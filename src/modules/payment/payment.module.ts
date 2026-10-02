@@ -1,13 +1,17 @@
-import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
+import { Module } from "@nestjs/common";
+import { MongooseModule } from "@nestjs/mongoose";
 import {
   WebhookEvent,
   WebhookEventSchema,
-} from './schemas/webhook-event.schema';
-import { PaymentService } from './payment.service';
-import { PaymentController } from './payment.controller';
-import { OrderModule } from '../order/order.module';
-import { InventoryModule } from '../inventory/inventory.module';
+} from "./schemas/webhook-event.schema";
+import { PaymentService } from "./payment.service";
+import { PaymentRouter } from "./payment-router.service";
+import { StripeService } from "./stripe.service";
+import { PaymentController } from "./payment.controller";
+import { OrderModule } from "../order/order.module";
+import { InventoryModule } from "../inventory/inventory.module";
+import { CustomOrderModule } from "../custom-order/custom-order.module";
+import { CurrencyConfigModule } from "../currency-config/currency-config.module";
 
 @Module({
   imports: [
@@ -16,9 +20,11 @@ import { InventoryModule } from '../inventory/inventory.module';
     ]),
     OrderModule,
     InventoryModule,
+    CustomOrderModule,
+    CurrencyConfigModule,
   ],
-  providers: [PaymentService],
+  providers: [PaymentService, StripeService, PaymentRouter],
   controllers: [PaymentController],
-  exports: [PaymentService],
+  exports: [PaymentService, PaymentRouter],
 })
 export class PaymentModule {}

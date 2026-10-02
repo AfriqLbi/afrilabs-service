@@ -12,12 +12,16 @@ export class User {
   @Prop({ required: true, unique: true, lowercase: true, trim: true })
   email: string;
 
+  /** Nigerian phone number — stored as-entered, e.g. "+2348011223344" */
+  @Prop({ type: String, default: null, trim: true })
+  phone: string | null;
+
   @Prop({ required: true, select: false })
   passwordHash: string;
 
   @Prop({
     type: String,
-    enum: ["super_admin", "merchandiser", "support_agent", "customer"],
+    enum: ["super_admin", "merchandiser", "support_agent", "customer", "staff"],
     default: "customer",
   })
   role: UserRole;

@@ -2,9 +2,15 @@ import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
 import { Document } from "mongoose";
 
 export type OrderStatus =
-  "pending_payment" | "paid" | "failed" | "abandoned" | "fulfilled" | "cancelled" | "refunded";
+  | "pending_payment"
+  | "paid"
+  | "failed"
+  | "abandoned"
+  | "fulfilled"
+  | "cancelled"
+  | "refunded";
 
-export type PaymentProvider = "paystack" | "flutterwave";
+export type PaymentProvider = "paystack" | "flutterwave" | "stripe";
 export type OrderDocument = Order & Document;
 
 export class OrderLineEmbedded {
@@ -61,12 +67,24 @@ export class Order {
 
   @Prop({
     type: String,
-    enum: ["pending_payment", "paid", "failed", "abandoned", "fulfilled", "cancelled", "refunded"],
+    enum: [
+      "pending_payment",
+      "paid",
+      "failed",
+      "abandoned",
+      "fulfilled",
+      "cancelled",
+      "refunded",
+    ],
     default: "pending_payment",
   })
   status: OrderStatus;
 
-  @Prop({ type: String, enum: ["paystack", "flutterwave"], required: true })
+  @Prop({
+    type: String,
+    enum: ["paystack", "flutterwave", "stripe"],
+    required: true,
+  })
   paymentProvider: PaymentProvider;
 
   @Prop({ required: true, index: true })
@@ -86,6 +104,73 @@ export class Order {
 
   @Prop({ type: String, default: null })
   processedWebhookId: string | null;
+
+  // ── Multi-currency fields (Req 4 — added in multi-currency-geo feature) ─────
+
+  /**
+   * NGN total in kobo (100 kobo = ₦1). Set once at order creation, never mutated.
+   * Source of truth for all accounting; all other currency amounts derive from this.
+   */
+  @Prop({ type: Number, default: null })
+  ngnTotal: number | null;
+
+  /**
+   * Charge amount in the minor unit of chargeCurrency (e.g. cents for USD).
+   * Computed once: Math.ceil(ngnTotal × fxRate × (1 + fxBuffer/100)).
+   * Webhook handlers MUST use this value — never recompute from current rates.
+   */
+  @Prop({ type: Number, default: null })
+  chargeTotal: number | null;
+
+  /**
+   * Exchange rate locked at order creation: 1 NGN = fxRate units of chargeCurrency.
+   * Always 1 for NGN orders.
+   */
+  @Prop({ type: Number, default: 1 })
+  fxRate: number;
+
+  /**
+   * FX buffer percentage applied at order creation (e.g. 2 = 2%).
+   * Always 0 for NGN orders.
+   */
+  @Prop({ type: Number, default: 0 })
+  fxBuffer: number;
+
+  /**
+   * ISO 4217 currency in which the customer is billed.
+   * Defaults to "NGN". Mirrors the existing `currency` field (kept for compat).
+   */
+  @Prop({ type: String, default: "NGN" })
+  chargeCurrency: string;
+
+  /**
+   * Timestamp when the price lock expires (order creation + 30 min).
+   * A BullMQ delayed job releases stock if the order is still pending_payment
+   * when this timestamp is reached.
+   */
+  @Prop({ type: Date, default: null })
+  reservationExpiresAt: Date | null;
+
+  /**
+   * BullMQ job ID for the per-order expiry job.
+   * Stored so the job can be cancelled immediately when payment is confirmed.
+   */
+  @Prop({ type: String, default: null })
+  expiryJobId: string | null;
+
+  /**
+   * Denormalized current production stage — mirrors the latest ProductionLog entry.
+   * Written here for fast reads (order detail + customer order status page) without
+   * requiring a join to production_logs.
+   * Source of truth remains the append-only production_logs collection.
+   */
+  @Prop({
+    type: String,
+    enum: ["cutting", "sewing", "quality_check", "ready", "delivered", null],
+    default: null,
+  })
+  productionStage:
+    "cutting" | "sewing" | "quality_check" | "ready" | "delivered" | null;
 }
 
 export const OrderSchema = SchemaFactory.createForClass(Order);

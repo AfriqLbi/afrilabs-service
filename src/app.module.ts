@@ -20,6 +20,13 @@ import { AuditLogModule } from "./modules/audit-log/audit-log.module";
 import { AnalyticsModule } from "./modules/analytics/analytics.module";
 import { SyncModule } from "./modules/sync/sync.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
+import { HeroBannersModule } from "./modules/hero-banners/hero-banners.module";
+// ── Labi fashion modules ──────────────────────────────────────────────────────
+import { MeasurementProfileModule } from "./modules/measurement-profile/measurement-profile.module";
+import { CustomOrderModule } from "./modules/custom-order/custom-order.module";
+import { ProductionTrackingModule } from "./modules/production-tracking/production-tracking.module";
+// ── Multi-currency ────────────────────────────────────────────────────────────
+import { CurrencyConfigModule } from "./modules/currency-config/currency-config.module";
 
 @Module({
   imports: [
@@ -84,7 +91,8 @@ import { NotificationsModule } from "./modules/notifications/notifications.modul
           redis: {
             host: config.get<string>("redis.host", "localhost"),
             port: config.get<number>("redis.port", 6379),
-            password: config.get<string | undefined>("redis.password") || undefined,
+            password:
+              config.get<string | undefined>("redis.password") || undefined,
             ...sharedOpts,
           },
         };
@@ -109,7 +117,14 @@ import { NotificationsModule } from "./modules/notifications/notifications.modul
     AnalyticsModule,
     SyncModule,
     NotificationsModule,
+    HeroBannersModule,
     JobsModule,
+    // ── Labi fashion modules ────────────────────────────────────────────────
+    MeasurementProfileModule,
+    CustomOrderModule,
+    ProductionTrackingModule,
+    // ── Multi-currency ──────────────────────────────────────────────────────
+    CurrencyConfigModule,
   ],
 })
 export class AppModule {}

@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model, FilterQuery, SortOrder, Types } from "mongoose";
 import slugify from "slugify";
@@ -13,21 +17,30 @@ import { CreateCategoryDto } from "./dto/create-category.dto";
 import { paginate, PaginatedResult } from "../../common/dto/pagination.dto";
 
 // Use plain lean types to avoid FlattenMaps<Document> incompatibility
-type LeanProduct = Omit<ProductDocument, keyof Document> & { _id: Types.ObjectId };
+type LeanProduct = Omit<ProductDocument, keyof Document> & {
+  _id: Types.ObjectId;
+};
 type LeanBrand = Omit<BrandDocument, keyof Document> & { _id: Types.ObjectId };
-type LeanCategory = Omit<CategoryDocument, keyof Document> & { _id: Types.ObjectId };
+type LeanCategory = Omit<CategoryDocument, keyof Document> & {
+  _id: Types.ObjectId;
+};
 
 @Injectable()
 export class CatalogService {
   constructor(
-    @InjectModel(Product.name) private readonly productModel: Model<ProductDocument>,
+    @InjectModel(Product.name)
+    private readonly productModel: Model<ProductDocument>,
     @InjectModel(Brand.name) private readonly brandModel: Model<BrandDocument>,
-    @InjectModel(Category.name) private readonly categoryModel: Model<CategoryDocument>,
+    @InjectModel(Category.name)
+    private readonly categoryModel: Model<CategoryDocument>,
   ) {}
 
   // ─── Products ────────────────────────────────────────────────────────────────
 
-  async createProduct(dto: CreateProductDto, actorId: string): Promise<ProductDocument> {
+  async createProduct(
+    dto: CreateProductDto,
+    actorId: string,
+  ): Promise<ProductDocument> {
     const sku = dto.sku.trim().toUpperCase();
     const exists = await this.productModel.exists({ sku });
     if (exists) throw new ConflictException(`SKU ${sku} already exists`);
@@ -123,7 +136,9 @@ export class CatalogService {
   }
 
   async findProductBySlug(slug: string): Promise<LeanProduct> {
-    const product = await this.productModel.findOne({ slug }).lean<LeanProduct>();
+    const product = await this.productModel
+      .findOne({ slug })
+      .lean<LeanProduct>();
     if (!product) throw new NotFoundException("Product not found");
     return product;
   }
@@ -135,7 +150,9 @@ export class CatalogService {
   }
 
   async findProductBySku(sku: string): Promise<LeanProduct | null> {
-    return this.productModel.findOne({ sku: sku.toUpperCase() }).lean<LeanProduct>();
+    return this.productModel
+      .findOne({ sku: sku.toUpperCase() })
+      .lean<LeanProduct>();
   }
 
   async updateProduct(
@@ -170,11 +187,17 @@ export class CatalogService {
   }
 
   async deleteProduct(id: string): Promise<void> {
-    const result = await this.productModel.findByIdAndUpdate(id, { status: "archived" });
+    const result = await this.productModel.findByIdAndUpdate(id, {
+      status: "archived",
+    });
     if (!result) throw new NotFoundException("Product not found");
   }
 
-  async toggleTag(id: string, tag: ProductTag, actorId: string): Promise<ProductDocument> {
+  async toggleTag(
+    id: string,
+    tag: ProductTag,
+    actorId: string,
+  ): Promise<ProductDocument> {
     const product = await this.productModel.findById(id);
     if (!product) throw new NotFoundException("Product not found");
 
@@ -189,11 +212,18 @@ export class CatalogService {
     return updated!;
   }
 
-  async getSimilarProducts(productId: string, limit = 8): Promise<LeanProduct[]> {
+  async getSimilarProducts(
+    productId: string,
+    limit = 8,
+  ): Promise<LeanProduct[]> {
     const product = await this.productModel.findById(productId).lean();
     if (!product) return [];
     return this.productModel
-      .find({ _id: { $ne: productId }, categorySlug: product.categorySlug, status: "active" })
+      .find({
+        _id: { $ne: productId },
+        categorySlug: product.categorySlug,
+        status: "active",
+      })
       .limit(limit)
       .lean<LeanProduct[]>();
   }
@@ -204,7 +234,11 @@ export class CatalogService {
     const slug = this.makeSlug(dto.name);
     const exists = await this.brandModel.exists({ slug });
     if (exists) throw new ConflictException("Brand slug already exists");
-    return this.brandModel.create({ name: dto.name, slug, logoUrl: dto.logoUrl ?? "" });
+    return this.brandModel.create({
+      name: dto.name,
+      slug,
+      logoUrl: dto.logoUrl ?? "",
+    });
   }
 
   async findAllBrands(): Promise<LeanBrand[]> {
@@ -217,8 +251,13 @@ export class CatalogService {
     return brand;
   }
 
-  async updateBrand(id: string, dto: Partial<CreateBrandDto>): Promise<BrandDocument> {
-    const brand = await this.brandModel.findByIdAndUpdate(id, dto, { new: true });
+  async updateBrand(
+    id: string,
+    dto: Partial<CreateBrandDto>,
+  ): Promise<BrandDocument> {
+    const brand = await this.brandModel.findByIdAndUpdate(id, dto, {
+      new: true,
+    });
     if (!brand) throw new NotFoundException("Brand not found");
     return brand;
   }
@@ -237,9 +276,13 @@ export class CatalogService {
     return this.categoryModel.create({ ...dto, slug });
   }
 
-  async findAllCategories(): Promise<LeanCategory[]> {
+  async findAllCategories(
+    type?: "category" | "section",
+  ): Promise<LeanCategory[]> {
+    const filter: Record<string, unknown> = { parentId: null };
+    if (type) filter.type = type;
     return this.categoryModel
-      .find({ parentId: null })
+      .find(filter)
       .sort({ sortOrder: 1, name: 1 })
       .lean<LeanCategory[]>();
   }
@@ -250,8 +293,13 @@ export class CatalogService {
     return cat;
   }
 
-  async updateCategory(id: string, dto: Partial<CreateCategoryDto>): Promise<CategoryDocument> {
-    const cat = await this.categoryModel.findByIdAndUpdate(id, dto, { new: true });
+  async updateCategory(
+    id: string,
+    dto: Partial<CreateCategoryDto>,
+  ): Promise<CategoryDocument> {
+    const cat = await this.categoryModel.findByIdAndUpdate(id, dto, {
+      new: true,
+    });
     if (!cat) throw new NotFoundException("Category not found");
     return cat;
   }
@@ -269,16 +317,26 @@ export class CatalogService {
 
   toProductResponse(doc: LeanProduct | ProductDocument) {
     const id = (doc._id as unknown as Types.ObjectId).toString();
-    const stockStatus = this.computeStockStatus((doc.stock ?? 0) - (doc.reserved ?? 0));
+    const stockStatus = this.computeStockStatus(
+      (doc.stock ?? 0) - (doc.reserved ?? 0),
+    );
     const d = doc as Record<string, unknown>;
     return {
       id,
       slug: d["slug"] as string,
       title: d["title"] as string,
       brand: { id: d["brandId"], name: d["brandName"], slug: d["brandSlug"] },
-      category: { id: d["categoryId"], name: d["categoryName"], slug: d["categorySlug"] },
+      category: {
+        id: d["categoryId"],
+        name: d["categoryName"],
+        slug: d["categorySlug"],
+      },
       subcategory: d["subcategoryId"]
-        ? { id: d["subcategoryId"], name: d["subcategoryName"], slug: d["subcategorySlug"] }
+        ? {
+            id: d["subcategoryId"],
+            name: d["subcategoryName"],
+            slug: d["subcategorySlug"],
+          }
         : undefined,
       priceBase: d["price"] as number,
       compareAtPrice: (d["compareAtPrice"] as number | null) ?? undefined,
@@ -287,7 +345,10 @@ export class CatalogService {
       description: d["description"] as string,
       descriptionHtml: d["descriptionHtml"] as string | undefined,
       stockStatus,
-      rating: { average: d["ratingAvg"] as number, count: d["ratingCount"] as number },
+      rating: {
+        average: d["ratingAvg"] as number,
+        count: d["ratingCount"] as number,
+      },
       tags: d["tags"] as string[],
       sku: d["sku"] as string,
       stock: d["stock"] as number,
@@ -296,7 +357,9 @@ export class CatalogService {
     };
   }
 
-  computeStockStatus(available: number): "in_stock" | "low_stock" | "out_of_stock" | "preorder" {
+  computeStockStatus(
+    available: number,
+  ): "in_stock" | "low_stock" | "out_of_stock" | "preorder" {
     if (available <= 0) return "out_of_stock";
     if (available <= 5) return "low_stock";
     return "in_stock";
