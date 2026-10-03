@@ -25,6 +25,7 @@ import { HeroBannersModule } from "./modules/hero-banners/hero-banners.module";
 import { MeasurementProfileModule } from "./modules/measurement-profile/measurement-profile.module";
 import { CustomOrderModule } from "./modules/custom-order/custom-order.module";
 import { ProductionTrackingModule } from "./modules/production-tracking/production-tracking.module";
+import { LookbookModule } from "./modules/lookbook/lookbook.module";
 // ── Multi-currency ────────────────────────────────────────────────────────────
 import { CurrencyConfigModule } from "./modules/currency-config/currency-config.module";
 
@@ -123,6 +124,7 @@ import { CurrencyConfigModule } from "./modules/currency-config/currency-config.
     MeasurementProfileModule,
     CustomOrderModule,
     ProductionTrackingModule,
+    LookbookModule,
     // ── Multi-currency ──────────────────────────────────────────────────────
     CurrencyConfigModule,
   ],
