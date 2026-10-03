@@ -48,7 +48,7 @@ function setCustomerCookie(res: Response, token: string) {
     httpOnly: true,
     secure: IS_PROD,
     sameSite: IS_PROD ? "none" : "lax",
-    maxAge: 15 * 60 * 1000, // 15 min — matches access token expiry
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days — matches refresh token lifetime
     path: "/",
   });
 }
@@ -59,7 +59,7 @@ function setAdminCookie(res: Response, token: string) {
     httpOnly: true,
     secure: IS_PROD,
     sameSite: IS_PROD ? "none" : "lax",
-    maxAge: 15 * 60 * 1000,
+    maxAge: 7 * 24 * 60 * 60 * 1000,
     path: "/",
   });
 }
