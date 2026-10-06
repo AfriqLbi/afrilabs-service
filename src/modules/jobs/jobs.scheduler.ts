@@ -1,12 +1,12 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bull';
-import { Queue } from 'bull';
+import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
+import { InjectQueue } from "@nestjs/bull";
+import { Queue } from "bull";
 import {
   QUEUE_PAYMENT_RECONCILE,
   QUEUE_RESERVATION_EXPIRY,
   JOB_RECONCILE_PENDING,
   JOB_EXPIRE_RESERVATIONS,
-} from './jobs.constants';
+} from "./jobs.constants";
 
 /**
  * Schedules recurring BullMQ jobs on module init.
@@ -30,10 +30,10 @@ export class JobsScheduler implements OnModuleInit {
       JOB_RECONCILE_PENDING,
       {},
       {
-        repeat: { cron: '*/10 * * * *' },
+        repeat: { cron: "*/10 * * * *" },
         removeOnComplete: 20,
         removeOnFail: 50,
-        jobId: 'reconcile-pending-recurring',
+        jobId: "reconcile-pending-recurring",
       },
     );
 
@@ -42,13 +42,13 @@ export class JobsScheduler implements OnModuleInit {
       JOB_EXPIRE_RESERVATIONS,
       {},
       {
-        repeat: { cron: '*/15 * * * *' },
+        repeat: { cron: "*/15 * * * *" },
         removeOnComplete: 20,
         removeOnFail: 50,
-        jobId: 'expire-reservations-recurring',
+        jobId: "expire-reservations-recurring",
       },
     );
 
-    this.logger.log('Recurring jobs scheduled');
+    this.logger.log("Recurring jobs scheduled");
   }
 }
