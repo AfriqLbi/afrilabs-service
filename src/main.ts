@@ -39,7 +39,12 @@ async function bootstrap() {
   app.enableCors({
     origin:
       nodeEnv === "production"
-        ? [clientOrigin, storefrontUrl]
+        ? [
+            clientOrigin,
+            storefrontUrl,
+            "https://labiafrica.com",
+            "https://www.labiafrica.com",
+          ]
         : [clientOrigin, storefrontUrl, /localhost:\d+/],
     credentials: true,
   });

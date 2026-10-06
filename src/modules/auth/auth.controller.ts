@@ -1,10 +1,15 @@
 /**
- * Auth controller — returns JWT tokens in the JSON response body.
+ * Auth controller — httpOnly cookies on .labiafrica.com
  *
- * Tokens are stored in the frontend's localStorage and sent as
- * Authorization: Bearer headers on every request. This works reliably
- * across different domains (Vercel frontend → Render backend) without
- * any cross-origin cookie restrictions.
+ * labiafrica.com (frontend) and api.labiafrica.com (backend) share the same
+ * root domain, so cookies with domain=".labiafrica.com" are sent automatically
+ * by the browser on every request — no localStorage, no Authorization header.
+ *
+ * Cookie names:
+ *   labi_at          — access token  (15 min, httpOnly)
+ *   labi_rt          — refresh token (7 days, httpOnly)
+ *   labi_admin_at    — admin access token  (15 min, httpOnly)
+ *   labi_admin_rt    — admin refresh token (7 days, httpOnly)
  */
 import {
   Body,
@@ -14,6 +19,8 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Req,
+  Res,
   UseGuards,
 } from "@nestjs/common";
 import {
@@ -26,10 +33,10 @@ import {
   ApiConflictResponse,
   ApiForbiddenResponse,
 } from "@nestjs/swagger";
+import { Request, Response } from "express";
 import { AuthService } from "./auth.service";
 import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
-import { RefreshTokenDto } from "./dto/refresh-token.dto";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { Roles } from "../../common/decorators/roles.decorator";
@@ -44,6 +51,46 @@ import {
   AuthResponseDto,
   AuthUserDto,
 } from "../../common/swagger/swagger-response.dto";
+
+// ── Cookie helpers ─────────────────────────────────────────────────────────────
+
+const IS_PROD = process.env.NODE_ENV === "production";
+const COOKIE_DOMAIN = IS_PROD ? ".labiafrica.com" : undefined;
+
+const BASE_OPTS = {
+  httpOnly: true,
+  secure: IS_PROD,
+  // same-site strict works when frontend and API share the same root domain.
+  // Use "lax" so the cookie is also sent on top-level navigations (e.g. payment redirects).
+  sameSite: (IS_PROD ? "lax" : "lax") as "lax",
+  ...(COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {}),
+  path: "/",
+} as const;
+
+function setAccessCookie(res: Response, token: string, name: string) {
+  res.cookie(name, token, {
+    ...BASE_OPTS,
+    maxAge: 15 * 60 * 1000, // 15 min — matches JWT expiry
+  });
+}
+
+function setRefreshCookie(res: Response, token: string, name: string) {
+  res.cookie(name, token, {
+    ...BASE_OPTS,
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+  });
+}
+
+function clearCookies(res: Response, ...names: string[]) {
+  const clearOpts = { ...BASE_OPTS, maxAge: 0 };
+  names.forEach((n) => res.cookie(n, "", clearOpts));
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+function getRefreshFromCookie(req: Request, name: string): string | undefined {
+  return (req.cookies as Record<string, string>)?.[name];
+}
 
 const ADMIN_ROLES = ["super_admin", "merchandiser", "support_agent", "staff"];
 
@@ -65,55 +112,86 @@ export class AuthController {
     description: "Validation error",
     type: ApiErrorResponse,
   })
-  register(@Body() dto: RegisterDto) {
-    return this.authService.register(dto);
+  async register(
+    @Body() dto: RegisterDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const data = await this.authService.register(dto);
+    setAccessCookie(res, data.accessToken, "labi_at");
+    setRefreshCookie(res, data.refreshToken, "labi_rt");
+    return { user: data.user };
   }
 
   @Post("login")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Customer login — returns token pair in body" })
+  @ApiOperation({
+    summary: "Customer login — sets httpOnly cookies on .labiafrica.com",
+  })
   @ApiEnvelopeOk(AuthResponseDto)
   @ApiUnauthorizedResponse({
     description: "Invalid credentials",
     type: ApiErrorResponse,
   })
-  async login(@Body() dto: LoginDto) {
+  async login(
+    @Body() dto: LoginDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const data = await this.authService.login(dto);
     if (ADMIN_ROLES.includes(data.user.role)) {
       throw new ForbiddenException(
         "Admin accounts must use /v1/admin/auth/login",
       );
     }
-    return data;
+    setAccessCookie(res, data.accessToken, "labi_at");
+    setRefreshCookie(res, data.refreshToken, "labi_rt");
+    return { user: data.user };
   }
 
   @Post("refresh")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Refresh customer token pair" })
+  @ApiOperation({ summary: "Refresh customer tokens via cookie" })
   @ApiEnvelopeOk(AuthResponseDto)
-  @ApiUnauthorizedResponse({
-    description: "Invalid or expired refresh token",
-    type: ApiErrorResponse,
-  })
-  refresh(@Body() dto: RefreshTokenDto) {
+  async refresh(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const refreshToken = getRefreshFromCookie(req, "labi_rt");
+    if (!refreshToken) {
+      clearCookies(res, "labi_at", "labi_rt");
+      throw new ForbiddenException("No refresh token");
+    }
     const payload = this.authService["jwtService"].decode(
-      dto.refreshToken,
+      refreshToken,
     ) as JwtPayload | null;
-    if (!payload?.sub) throw new Error("Invalid refresh token structure");
-    return this.authService.refreshTokens(payload.sub, dto.refreshToken);
+    if (!payload?.sub) {
+      clearCookies(res, "labi_at", "labi_rt");
+      throw new ForbiddenException("Invalid refresh token");
+    }
+    const data = await this.authService.refreshTokens(
+      payload.sub,
+      refreshToken,
+    );
+    setAccessCookie(res, data.accessToken, "labi_at");
+    setRefreshCookie(res, data.refreshToken, "labi_rt");
+    return { user: data.user };
   }
 
-  @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Post("logout")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Logout — invalidate refresh token server-side" })
+  @ApiOperation({
+    summary: "Customer logout — clears cookies and invalidates refresh token",
+  })
   @ApiResponse({ status: 200 })
-  logout(@CurrentUser() user: JwtPayload) {
-    return this.authService.logout(user.sub);
+  async logout(
+    @CurrentUser() user: JwtPayload,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    await this.authService.logout(user.sub);
+    clearCookies(res, "labi_at", "labi_rt");
+    return { message: "Logged out" };
   }
 
-  @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Get("me")
   @ApiOperation({ summary: "Get current customer profile" })
@@ -137,9 +215,9 @@ export class AdminAuthController {
   @Post("login")
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: "Admin login — returns token pair in body",
+    summary: "Admin login — sets separate httpOnly admin cookies",
     description:
-      "Only super_admin, merchandiser, support_agent, and staff roles are accepted. " +
+      "Only super_admin, merchandiser, support_agent, and staff are accepted. " +
       "Customer accounts are rejected with 403.",
   })
   @ApiEnvelopeOk(AuthResponseDto)
@@ -151,38 +229,60 @@ export class AdminAuthController {
     description: "Not an admin account",
     type: ApiErrorResponse,
   })
-  async adminLogin(@Body() dto: LoginDto) {
+  async adminLogin(
+    @Body() dto: LoginDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const data = await this.authService.login(dto);
     if (!ADMIN_ROLES.includes(data.user.role)) {
       throw new ForbiddenException("This account does not have admin access");
     }
-    return data;
+    setAccessCookie(res, data.accessToken, "labi_admin_at");
+    setRefreshCookie(res, data.refreshToken, "labi_admin_rt");
+    return { user: data.user };
   }
 
   @Post("refresh")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Refresh admin token pair" })
-  @ApiEnvelopeOk(AuthResponseDto)
-  adminRefresh(@Body() dto: RefreshTokenDto) {
+  @ApiOperation({ summary: "Refresh admin tokens via cookie" })
+  async adminRefresh(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const refreshToken = getRefreshFromCookie(req, "labi_admin_rt");
+    if (!refreshToken) {
+      clearCookies(res, "labi_admin_at", "labi_admin_rt");
+      throw new ForbiddenException("No admin refresh token");
+    }
     const payload = this.authService["jwtService"].decode(
-      dto.refreshToken,
+      refreshToken,
     ) as JwtPayload | null;
-    if (!payload?.sub) throw new Error("Invalid refresh token structure");
-    return this.authService.refreshTokens(payload.sub, dto.refreshToken);
+    if (!payload?.sub) {
+      clearCookies(res, "labi_admin_at", "labi_admin_rt");
+      throw new ForbiddenException("Invalid refresh token");
+    }
+    const data = await this.authService.refreshTokens(
+      payload.sub,
+      refreshToken,
+    );
+    setAccessCookie(res, data.accessToken, "labi_admin_at");
+    setRefreshCookie(res, data.refreshToken, "labi_admin_rt");
+    return { user: data.user };
   }
 
-  @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Post("logout")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: "Admin logout — invalidate refresh token server-side",
-  })
-  adminLogout(@CurrentUser() user: JwtPayload) {
-    return this.authService.logout(user.sub);
+  @ApiOperation({ summary: "Admin logout — clears admin cookies" })
+  async adminLogout(
+    @CurrentUser() user: JwtPayload,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    await this.authService.logout(user.sub);
+    clearCookies(res, "labi_admin_at", "labi_admin_rt");
+    return { message: "Admin logged out" };
   }
 
-  @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Get("me")
   @ApiOperation({ summary: "Get current admin profile" })
