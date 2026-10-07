@@ -19,8 +19,32 @@ async function bootstrap() {
   });
 
   // Register body parsers with a 10 MB ceiling BEFORE all other middleware.
-  app.use(json({ limit: "10mb" }));
-  app.use(urlencoded({ limit: "10mb", extended: true }));
+  // IMPORTANT: Skip json/urlencoded for multipart/form-data requests so that
+  // multer (used by FileInterceptor) can read the stream unmodified.
+  // Without this guard, the json middleware consumes the stream and multer
+  // gets an empty body → 500 Internal Server Error on file uploads.
+  app.use(
+    (
+      req: import("express").Request,
+      res: import("express").Response,
+      next: import("express").NextFunction,
+    ) => {
+      const ct = req.headers["content-type"] ?? "";
+      if (ct.startsWith("multipart/form-data")) return next();
+      json({ limit: "10mb" })(req, res, next);
+    },
+  );
+  app.use(
+    (
+      req: import("express").Request,
+      res: import("express").Response,
+      next: import("express").NextFunction,
+    ) => {
+      const ct = req.headers["content-type"] ?? "";
+      if (ct.startsWith("multipart/form-data")) return next();
+      urlencoded({ limit: "10mb", extended: true })(req, res, next);
+    },
+  );
   app.use(cookieParser());
 
   const config = app.get(ConfigService);
