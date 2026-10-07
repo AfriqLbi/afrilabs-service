@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { MongooseModule } from "@nestjs/mongoose";
 import {
   WebhookEvent,
@@ -18,7 +18,7 @@ import { CurrencyConfigModule } from "../currency-config/currency-config.module"
     MongooseModule.forFeature([
       { name: WebhookEvent.name, schema: WebhookEventSchema },
     ]),
-    OrderModule,
+    forwardRef(() => OrderModule),
     InventoryModule,
     CustomOrderModule,
     CurrencyConfigModule,

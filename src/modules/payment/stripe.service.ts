@@ -1,4 +1,10 @@
-import { BadRequestException, Injectable, Logger } from "@nestjs/common";
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Logger,
+  forwardRef,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model, Types } from "mongoose";
@@ -20,6 +26,7 @@ export class StripeService {
   constructor(
     @InjectModel(WebhookEvent.name)
     private readonly webhookModel: Model<WebhookEventDocument>,
+    @Inject(forwardRef(() => OrderService))
     private readonly orderService: OrderService,
     private readonly inventoryService: InventoryService,
     private readonly customOrderService: CustomOrderService,
