@@ -16,19 +16,46 @@ import { TransformInterceptor } from "./common/interceptors/transform.intercepto
 
 async function bootstrap() {
   /**
-   * rawBody: true  — NestJS v10 captures req.rawBody for webhook HMAC verification.
-   *                  Requires the built-in body parser to be enabled (no bodyParser:false).
+   * Body-parsing strategy:
    *
-   * After NestFactory.create we register our own json/urlencoded parsers with
-   * a 10 MB limit to override the 100 kb default. These parsers explicitly skip
-   * multipart/form-data requests so Multer (FileInterceptor) can read the stream
-   * unmodified. This was the root cause of the 500 on /admin/media/upload.
+   * 1. Webhook paths (/v1/payments/webhooks/*) get a raw-body middleware that
+   *    buffers the exact bytes into req.rawBody. HMAC verification (Paystack,
+   *    Flutterwave, Stripe) requires the unmodified buffer — even a single
+   *    whitespace change invalidates the signature.
+   *
+   * 2. Multipart requests (/admin/media/upload) are left completely untouched
+   *    so Multer / FileInterceptor can read the stream itself.
+   *
+   * 3. Everything else gets our json/urlencoded parsers with a 10 MB limit
+   *    (overrides NestJS's default 100 kb).
+   *
+   * Why NOT rawBody:true globally:
+   *    NestJS's built-in raw body parser runs before any middleware and
+   *    consumes the multipart stream before Multer sees it → 500 on uploads.
+   *    Scoping raw-body capture to webhook paths avoids that conflict.
    */
-  const app = await NestFactory.create(AppModule, {
-    rawBody: true,
+  const app = await NestFactory.create(AppModule);
+
+  // ── 1. Raw-body capture — webhook paths only ─────────────────────────────
+  // Must be registered BEFORE the json/urlencoded parsers so it wins on those
+  // paths. Stores the raw Buffer on req.rawBody for HMAC verification.
+  const WEBHOOK_PATH_RE = /^\/v1\/payments\/webhooks\//;
+
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (!WEBHOOK_PATH_RE.test(req.path)) return next();
+
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk: Buffer) => chunks.push(chunk));
+    req.on("end", () => {
+      const raw = Buffer.concat(chunks);
+      // Attach to the Express request — NestJS RawBodyRequest<Request> reads this
+      (req as Request & { rawBody: Buffer }).rawBody = raw;
+      next();
+    });
+    req.on("error", next);
   });
 
-  // Raise body size limit to 10 MB; skip multipart so Multer works correctly.
+  // ── 2. JSON / URL-encoded parsers — skip multipart so Multer works ────────
   const skipMultipart =
     (handler: ReturnType<typeof json> | ReturnType<typeof urlencoded>) =>
     (req: Request, res: Response, next: NextFunction) => {

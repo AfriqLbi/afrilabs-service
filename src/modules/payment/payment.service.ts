@@ -239,7 +239,12 @@ export class PaymentService {
       .update(rawBody)
       .digest("hex");
 
-    if (signature !== expected) {
+    if (
+      !crypto.timingSafeEqual(
+        Buffer.from(expected, "hex"),
+        Buffer.from(signature ?? "", "hex"),
+      )
+    ) {
       throw new UnauthorizedException("Invalid Flutterwave webhook signature");
     }
 

@@ -9,8 +9,12 @@ export type WebhookEventDocument = WebhookEvent & Document;
  */
 @Schema({ timestamps: true, collection: "webhook_events" })
 export class WebhookEvent {
-  @Prop({ type: String, required: true, enum: ["paystack", "flutterwave"] })
-  provider: "paystack" | "flutterwave";
+  @Prop({
+    type: String,
+    required: true,
+    enum: ["paystack", "flutterwave", "stripe"],
+  })
+  provider: "paystack" | "flutterwave" | "stripe";
 
   /** Provider's unique event ID — the unique index lives here */
   @Prop({ required: true, unique: true })
