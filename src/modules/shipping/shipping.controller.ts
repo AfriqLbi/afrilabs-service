@@ -181,7 +181,7 @@ class AdminQuotesQueryDto {
 @ApiBearerAuth()
 @Controller({ path: "admin/shipping", version: "1" })
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles("super_admin", "merchandiser")
+@Roles("super_admin", "merchandiser", "support_agent")
 @ApiForbiddenResponse({
   description: "Insufficient role",
   type: ApiErrorResponse,
@@ -252,8 +252,8 @@ export class AdminShippingController {
     required: false,
     enum: ["AWAITING_QUOTE", "QUOTED", "EXPIRED"],
   })
-  listQuotes(@Query() _query: AdminQuotesQueryDto) {
-    return this.quoteService.listPendingQuotes();
+  listQuotes(@Query() query: AdminQuotesQueryDto) {
+    return this.quoteService.listPendingQuotes(query.state);
   }
 
   // ── Quote submission ───────────────────────────────────────────────────────

@@ -396,10 +396,13 @@ export class ShippingQuoteService {
 
   // ─── Queries ──────────────────────────────────────────────────────────────
 
-  /** Returns all orders awaiting a shipping quote, oldest first. */
-  async listPendingQuotes(): Promise<OrderDocument[]> {
+  /** Returns orders by shipping status (defaults to AWAITING_QUOTE + QUOTED), oldest first. */
+  async listPendingQuotes(state?: string): Promise<OrderDocument[]> {
+    const filter = state
+      ? { shippingStatus: state }
+      : { shippingStatus: { $in: ["AWAITING_QUOTE", "QUOTED"] } };
     return this.orderModel
-      .find({ shippingStatus: "AWAITING_QUOTE" })
+      .find(filter)
       .sort({ createdAt: 1 })
       .lean<OrderDocument[]>();
   }
