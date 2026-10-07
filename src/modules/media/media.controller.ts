@@ -32,7 +32,7 @@ import {
 } from "../../common/swagger/swagger-response.dto";
 
 class SignedUploadQueryDto {
-  @ApiPropertyOptional({ example: "alphavista/products" })
+  @ApiPropertyOptional({ example: "labiafrica/products" })
   @IsOptional()
   @IsString()
   folder?: string;
@@ -59,7 +59,7 @@ export class MediaController {
   @ApiEnvelopeOk(SignedUploadParamsDto)
   getSignedParams(@Query() query: SignedUploadQueryDto) {
     return this.mediaService.generateSignedUploadParams(
-      query.folder ?? "alphavista/products",
+      query.folder ?? "labiafrica/products",
     );
   }
 
@@ -104,6 +104,6 @@ export class MediaController {
       size: number;
     },
   ) {
-    return this.mediaService.uploadBuffer(file.buffer, "alphavista/products");
+    return this.mediaService.uploadBuffer(file.buffer, "labiafrica/products");
   }
 }

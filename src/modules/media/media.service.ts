@@ -18,7 +18,7 @@ export class MediaService {
 
   async uploadBuffer(
     buffer: Buffer,
-    folder: string = 'alphavista/products',
+    folder: string = 'labiafrica/products',
     publicId?: string,
   ): Promise<{ publicId: string; url: string; secureUrl: string }> {
     return new Promise((resolve, reject) => {
@@ -49,7 +49,7 @@ export class MediaService {
 
   async uploadFromUrl(
     url: string,
-    folder: string = 'alphavista/products',
+    folder: string = 'labiafrica/products',
   ): Promise<{ publicId: string; secureUrl: string }> {
     try {
       const result: UploadApiResponse = await cloudinary.uploader.upload(url, {
@@ -67,7 +67,7 @@ export class MediaService {
 
   // ─── Generate a signed upload URL for direct browser-to-Cloudinary upload ─
 
-  generateSignedUploadParams(folder = 'alphavista/products'): {
+  generateSignedUploadParams(folder = 'labiafrica/products'): {
     apiKey: string;
     cloudName: string;
     timestamp: number;
