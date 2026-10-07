@@ -561,34 +561,6 @@ export class NotificationsService {
     await this.send(to, `Shipping quote expired — ${order.orderNumber}`, html);
   }
 
-  // ─── Shipping: quote requested (admin alert) ──────────────────────────────
-
-  async sendShippingQuoteRequested(order: OrderDocument): Promise<void> {
-    const adminEmails = this.config
-      .get<string>("shipping.adminAlertEmails", "")
-      .split(",")
-      .map((e) => e.trim())
-      .filter(Boolean);
-    if (!adminEmails.length) return;
-
-    const quotesUrl = `${this.storefrontUrl.replace(/\/$/, "")}/admin/shipping/quotes`;
-    const html = labiShell(`
-      <h1 style="font-size:18px;margin-bottom:4px;color:#FED700">New shipping quote needed</h1>
-      <p style="color:#bbb">A customer has placed an order that requires a shipping quote.</p>
-      <div style="background:#1a1a1a;border:1px solid #333;padding:16px;margin:16px 0">
-        <p style="margin:0 0 6px"><strong>Order:</strong> ${order.orderNumber}</p>
-        <p style="margin:0 0 6px"><strong>Customer:</strong> ${order.customerName ?? "Guest"}</p>
-        <p style="margin:0 0 6px"><strong>Destination:</strong> ${order.shippingAddress?.country ?? "—"}</p>
-        <p style="margin:0"><strong>Requested at:</strong> ${order.shippingQuote?.requestedAt?.toISOString() ?? new Date().toISOString()}</p>
-      </div>
-      ${goldBtn(quotesUrl, "Submit Quote")}
-    `);
-
-    for (const to of adminEmails) {
-      await this.send(to, `Quote needed — Order ${order.orderNumber}`, html);
-    }
-  }
-
   // ─── Shipping: adjustment (customer) ──────────────────────────────────────
 
   async sendShippingAdjustment(

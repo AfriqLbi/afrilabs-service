@@ -503,7 +503,7 @@ export class PaymentService {
       payment_intent:
         typeof session.payment_intent === "string"
           ? session.payment_intent
-          : session.payment_intent,
+          : (session.payment_intent as { id: string }).id,
       amount: amountMinorUnits,
     });
     return { refundId: refund.id };
