@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { MongooseModule } from "@nestjs/mongoose";
 import { BullModule } from "@nestjs/bull";
 import {
@@ -20,7 +20,6 @@ import {
   AdminShippingController,
 } from "./shipping.controller";
 import { QUEUE_SHIPPING } from "./shipping.constants";
-import { OrderModule } from "../order/order.module";
 import { NotificationsModule } from "../notifications/notifications.module";
 import { AuditLogModule } from "../audit-log/audit-log.module";
 import { CartModule } from "../cart/cart.module";
@@ -31,10 +30,11 @@ import { InventoryModule } from "../inventory/inventory.module";
     MongooseModule.forFeature([
       { name: ShippingZone.name, schema: ShippingZoneSchema },
       { name: ShippingSettings.name, schema: ShippingSettingsSchema },
+      // Order model registered here directly — ShippingModule does NOT import
+      // OrderModule to avoid a circular dependency.
       { name: Order.name, schema: OrderSchema },
     ]),
     BullModule.registerQueue({ name: QUEUE_SHIPPING }),
-    OrderModule,
     NotificationsModule,
     AuditLogModule,
     CartModule,
