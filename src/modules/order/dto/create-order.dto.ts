@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsEnum,
   IsEmail,
   IsNotEmpty,
@@ -120,4 +121,70 @@ export class CreateOrderDto {
   @ValidateNested()
   @Type(() => FxRateSnapshotDto)
   fxRateSnapshot?: FxRateSnapshotDto;
+
+  /**
+   * Shipping fee in minor units of chargeCurrency, as returned by
+   * POST /shipping/estimate. Must be 0 for pickup and quote-zone orders.
+   * Server-side the value is validated against the zone's current rate card.
+   */
+  @ApiPropertyOptional({
+    example: 150000,
+    description:
+      "Shipping fee in minor units of chargeCurrency. " +
+      "Provide the value from POST /shipping/estimate. " +
+      "0 for pickup. Omit for quote-zone orders (fee set by admin after order creation).",
+  })
+  @IsOptional()
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(0)
+  shippingFee?: number;
+
+  /**
+   * How the shipping fee was determined.
+   * The client reflects back the `source` field from the estimate response.
+   */
+  @ApiPropertyOptional({
+    enum: [
+      "rate_card",
+      "admin_quote",
+      "admin_override",
+      "free_threshold",
+      "pickup",
+    ],
+    example: "rate_card",
+  })
+  @IsOptional()
+  @IsEnum([
+    "rate_card",
+    "admin_quote",
+    "admin_override",
+    "free_threshold",
+    "pickup",
+  ])
+  shippingFeeSource?: string;
+
+  /** Zone name snapshot — stored on the order for display without a join. */
+  @ApiPropertyOptional({ example: "Lagos" })
+  @IsOptional()
+  @IsString()
+  shippingZoneName?: string;
+
+  /**
+   * Chargeable weight (grams) used when the frontend computed the estimate.
+   * Stored as a snapshot on the order.
+   */
+  @ApiPropertyOptional({ example: 850 })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  chargeableWeightGrams?: number;
+
+  /**
+   * Customer chose warehouse pickup instead of delivery.
+   * Sets shippingFee = 0 and shippingFeeSource = "pickup".
+   */
+  @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  @IsBoolean()
+  pickup?: boolean;
 }

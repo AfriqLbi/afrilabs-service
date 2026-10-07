@@ -1,7 +1,8 @@
 import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
 import { Document } from "mongoose";
 
-export type StockStatus = "in_stock" | "low_stock" | "out_of_stock" | "preorder";
+export type StockStatus =
+  "in_stock" | "low_stock" | "out_of_stock" | "preorder";
 export type ProductTag = "new_arrival" | "best_seller" | "featured" | "deal";
 export type ProductStatus = "active" | "draft" | "archived";
 export type ProductDocument = Product & Document;
@@ -68,10 +69,18 @@ export class Product {
   @Prop({ type: [{ label: String, value: String }], default: [] })
   specs: { label: string; value: string }[];
 
-  @Prop({ type: String, enum: ["active", "draft", "archived"], default: "draft" })
+  @Prop({
+    type: String,
+    enum: ["active", "draft", "archived"],
+    default: "draft",
+  })
   status: ProductStatus;
 
-  @Prop({ type: [String], enum: ["new_arrival", "best_seller", "featured", "deal"], default: [] })
+  @Prop({
+    type: [String],
+    enum: ["new_arrival", "best_seller", "featured", "deal"],
+    default: [],
+  })
   tags: ProductTag[];
 
   @Prop({ default: 0 })
@@ -82,6 +91,27 @@ export class Product {
 
   @Prop({ type: String, default: null })
   lastModifiedBy: string | null;
+
+  // ── Shipping weight / dimensions ──────────────────────────────────────────
+
+  /**
+   * Packed weight in grams. Used by ShippingResolverService to compute
+   * chargeable weight = max(actual, volumetric).
+   * A product should not be publishable without this field set.
+   */
+  @Prop({ type: Number, default: null })
+  packageWeightGrams: number | null;
+
+  /**
+   * Outer dimensions of the packed parcel in centimetres.
+   * Volumetric weight formula: (l × w × h) / 5000 × 1000 grams.
+   */
+  @Prop({
+    type: { l: Number, w: Number, h: Number },
+    default: null,
+    _id: false,
+  })
+  packageDims: { l: number; w: number; h: number } | null;
 }
 
 export const ProductSchema = SchemaFactory.createForClass(Product);

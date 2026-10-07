@@ -18,10 +18,20 @@ import {
   ApiForbiddenResponse,
   ApiBody,
 } from "@nestjs/swagger";
-import { IsEnum, IsOptional, IsString, MaxLength } from "class-validator";
+import {
+  IsEnum,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  MaxLength,
+  ValidateNested,
+} from "class-validator";
+import { Type } from "class-transformer";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { OrderService } from "./order.service";
-import { CreateOrderDto } from "./dto/create-order.dto";
+import { CreateOrderDto, ShippingAddressDto } from "./dto/create-order.dto";
 import { OrderStatus } from "./schemas/order.schema";
 import {
   JwtAuthGuard,
@@ -69,6 +79,43 @@ class UpdateProductionStageDto {
   @IsString()
   @MaxLength(500)
   note?: string;
+}
+
+class PayOrderDto {
+  @ApiPropertyOptional({
+    enum: ["paystack", "flutterwave", "stripe"],
+    example: "paystack",
+  })
+  @IsOptional()
+  @IsEnum(["paystack", "flutterwave", "stripe"])
+  provider?: "paystack" | "flutterwave" | "stripe";
+
+  @ApiPropertyOptional({
+    description:
+      "Signed link token (required for guest checkout on quote orders)",
+  })
+  @IsOptional()
+  @IsString()
+  linkToken?: string;
+}
+
+class CreateShippingAdjustmentDto {
+  @ApiProperty({ enum: ["refund", "extra_charge"], example: "refund" })
+  @IsEnum(["refund", "extra_charge"])
+  type: "refund" | "extra_charge";
+
+  @ApiProperty({
+    example: 150000,
+    description: "Amount in minor units of the order currency",
+  })
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @IsPositive()
+  amount: number;
+
+  @ApiProperty({ example: "Courier charged less than quoted" })
+  @IsString()
+  @IsNotEmpty()
+  reason: string;
 }
 
 // ─── Customer-facing ──────────────────────────────────────────────────────────
@@ -120,6 +167,74 @@ export class OrderController {
   })
   getOrder(@Param("id") id: string) {
     return this.orderService.findById(id);
+  }
+
+  @UseGuards(OptionalJwtAuthGuard)
+  @Post(":id/pay")
+  @ApiOperation({
+    summary: "Pay for an order (including quote orders)",
+    description:
+      "Creates a payment session for a PENDING_PAYMENT order. " +
+      "Authenticated owners pay directly; guests must provide a signed linkToken. " +
+      "Expired quotes are rejected.",
+  })
+  @ApiParam({ name: "id", description: "Order ObjectId" })
+  @ApiBody({ type: PayOrderDto })
+  @ApiBadRequestResponse({
+    description: "Order not ready / quote expired",
+    type: ApiErrorResponse,
+  })
+  payOrder(
+    @Param("id") id: string,
+    @Body() dto: PayOrderDto,
+    @CurrentUser() user: JwtPayload | undefined,
+  ) {
+    return this.orderService.payOrder(
+      id,
+      user?.sub ?? null,
+      dto.provider,
+      dto.linkToken,
+    );
+  }
+
+  @UseGuards(OptionalJwtAuthGuard)
+  @Post(":id/shipping/requote")
+  @ApiOperation({
+    summary: "Request a new shipping quote (after expiry)",
+    description:
+      "Resets an expired-quote order back to AWAITING_QUOTE and re-alerts admins.",
+  })
+  @ApiParam({ name: "id", description: "Order ObjectId" })
+  @ApiBadRequestResponse({
+    description: "Quote is not expired",
+    type: ApiErrorResponse,
+  })
+  requestRequote(
+    @Param("id") id: string,
+    @CurrentUser() user: JwtPayload | undefined,
+  ) {
+    return this.orderService.requestRequote(id, user?.sub ?? null);
+  }
+
+  @UseGuards(OptionalJwtAuthGuard)
+  @Patch(":id/shipping-address")
+  @ApiOperation({
+    summary: "Update shipping address on an unpaid order",
+    description:
+      "Invalidates any pending quote and re-alerts admins when the address changes.",
+  })
+  @ApiParam({ name: "id", description: "Order ObjectId" })
+  @ApiBody({ type: ShippingAddressDto })
+  @ApiBadRequestResponse({
+    description: "Order is paid or closed",
+    type: ApiErrorResponse,
+  })
+  updateShippingAddress(
+    @Param("id") id: string,
+    @Body() dto: ShippingAddressDto,
+    @CurrentUser() user: JwtPayload | undefined,
+  ) {
+    return this.orderService.updateShippingAddress(id, dto, user?.sub ?? null);
   }
 }
 
@@ -218,5 +333,28 @@ export class AdminOrderController {
       actor.email,
       dto.note,
     );
+  }
+
+  @Post(":id/shipping-adjustment")
+  @Roles("super_admin", "merchandiser")
+  @ApiOperation({
+    summary: "[Admin] Create a shipping adjustment (refund or extra charge)",
+    description:
+      "Post-payment adjustment. For refunds, initiates a gateway refund. " +
+      "For extra charges, records the adjustment and notifies the customer.",
+  })
+  @ApiParam({ name: "id", description: "Order ObjectId" })
+  @ApiBody({ type: CreateShippingAdjustmentDto })
+  @ApiEnvelopeOk(OrderResponseDto)
+  @ApiBadRequestResponse({
+    description: "Order is not paid",
+    type: ApiErrorResponse,
+  })
+  createShippingAdjustment(
+    @Param("id") id: string,
+    @Body() dto: CreateShippingAdjustmentDto,
+    @CurrentUser() actor: JwtPayload,
+  ) {
+    return this.orderService.createShippingAdjustment(id, dto, actor.sub);
   }
 }

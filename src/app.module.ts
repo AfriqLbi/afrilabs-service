@@ -28,6 +28,7 @@ import { ProductionTrackingModule } from "./modules/production-tracking/producti
 import { LookbookModule } from "./modules/lookbook/lookbook.module";
 // ── Multi-currency ────────────────────────────────────────────────────────────
 import { CurrencyConfigModule } from "./modules/currency-config/currency-config.module";
+import { ShippingModule } from "./modules/shipping/shipping.module";
 
 @Module({
   imports: [
@@ -127,6 +128,8 @@ import { CurrencyConfigModule } from "./modules/currency-config/currency-config.
     LookbookModule,
     // ── Multi-currency ──────────────────────────────────────────────────────
     CurrencyConfigModule,
+    // ── Shipping ──────────────────────────────────────────────────────────────
+    ShippingModule,
   ],
 })
 export class AppModule {}

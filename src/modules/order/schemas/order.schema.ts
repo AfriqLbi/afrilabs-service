@@ -1,7 +1,8 @@
 import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
-import { Document } from "mongoose";
+import { Document, Types } from "mongoose";
 
 export type OrderStatus =
+  | "awaiting_shipping_quote"
   | "pending_payment"
   | "paid"
   | "failed"
@@ -9,6 +10,15 @@ export type OrderStatus =
   | "fulfilled"
   | "cancelled"
   | "refunded";
+
+export type ShippingStatus =
+  | "NOT_CALCULATED"
+  | "CALCULATED"
+  | "AWAITING_QUOTE"
+  | "QUOTED"
+  | "PAID"
+  | "PICKUP"
+  | "EXPIRED";
 
 export type PaymentProvider = "paystack" | "flutterwave" | "stripe";
 export type OrderDocument = Order & Document;
@@ -59,6 +69,84 @@ export class Order {
   @Prop({ default: 0 })
   discountAmount: number;
 
+  /**
+   * Shipping fee in minor units of chargeCurrency.
+   * 0 until calculated or quoted. Included in chargeTotal.
+   */
+  @Prop({ default: 0, min: 0 })
+  shippingFee: number;
+
+  /**
+   * How the shipping fee was determined.
+   * null until the fee is set.
+   */
+  @Prop({
+    type: String,
+    enum: [
+      "rate_card",
+      "admin_quote",
+      "admin_override",
+      "free_threshold",
+      "pickup",
+      null,
+    ],
+    default: null,
+  })
+  shippingFeeSource: string | null;
+
+  /** Snapshot of the matched zone name (for display without a join). */
+  @Prop({ type: String, default: null })
+  shippingZoneName: string | null;
+
+  /** Reference to the matched ShippingZone document. */
+  @Prop({ type: Types.ObjectId, ref: "ShippingZone", default: null })
+  shippingZoneId: Types.ObjectId | null;
+
+  /** Chargeable weight used when the fee was calculated (grams). */
+  @Prop({ type: Number, default: null })
+  chargeableWeightGrams: number | null;
+
+  @Prop({
+    type: String,
+    enum: [
+      "NOT_CALCULATED",
+      "CALCULATED",
+      "AWAITING_QUOTE",
+      "QUOTED",
+      "PAID",
+      "PICKUP",
+      "EXPIRED",
+    ],
+    default: "NOT_CALCULATED",
+  })
+  shippingStatus: ShippingStatus;
+
+  /** Embedded shipping quote — populated when zone mode is "quote". */
+  @Prop({ type: Object, default: null })
+  shippingQuote: {
+    requestedAt?: Date;
+    quotedAt?: Date;
+    quotedBy?: Types.ObjectId;
+    currency?: string;
+    amount?: number;
+    carrier?: string;
+    etaDays?: number;
+    note?: string;
+    validUntil?: Date;
+    state: "REQUESTED" | "QUOTED" | "EXPIRED" | "ACCEPTED" | "SUPERSEDED";
+  } | null;
+
+  /** Post-payment shipping adjustments (refund or extra charge). */
+  @Prop({ type: [Object], default: [] })
+  shippingAdjustments: {
+    type: "refund" | "extra_charge" | "override";
+    amount: number;
+    reason: string;
+    createdBy: Types.ObjectId;
+    paymentId?: Types.ObjectId;
+    createdAt: Date;
+  }[];
+
   @Prop({ required: true, min: 0 })
   total: number;
 
@@ -68,6 +156,7 @@ export class Order {
   @Prop({
     type: String,
     enum: [
+      "awaiting_shipping_quote",
       "pending_payment",
       "paid",
       "failed",
@@ -104,6 +193,16 @@ export class Order {
 
   @Prop({ type: String, default: null })
   processedWebhookId: string | null;
+
+  /**
+   * Set when a webhook amount/currency does not match the order snapshot.
+   * The order stays in `pending_payment` and admins are alerted (spec §7.3).
+   */
+  @Prop({ type: Boolean, default: false })
+  paymentFlagged: boolean;
+
+  @Prop({ type: String, default: null })
+  paymentFlagReason: string | null;
 
   // ── Multi-currency fields (Req 4 — added in multi-currency-geo feature) ─────
 
@@ -180,3 +279,4 @@ export const OrderSchema = SchemaFactory.createForClass(Order);
 // These compound indexes are not expressible via @Prop, so they stay here:
 OrderSchema.index({ status: 1, createdAt: -1 });
 OrderSchema.index({ customerId: 1, createdAt: -1 });
+OrderSchema.index({ shippingStatus: 1, createdAt: 1 }); // quotes queue — oldest first

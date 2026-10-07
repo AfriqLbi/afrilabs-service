@@ -1,13 +1,12 @@
-import {
-  BadRequestException,
-  Injectable,
-  Logger,
-} from "@nestjs/common";
+import { BadRequestException, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model, Types } from "mongoose";
 import Stripe from "stripe";
-import { WebhookEvent, WebhookEventDocument } from "./schemas/webhook-event.schema";
+import {
+  WebhookEvent,
+  WebhookEventDocument,
+} from "./schemas/webhook-event.schema";
 import { OrderService } from "../order/order.service";
 import { InventoryService } from "../inventory/inventory.service";
 import { CustomOrderService } from "../custom-order/custom-order.service";
@@ -59,7 +58,10 @@ export class StripeService {
     this.assertEnabled();
 
     const orderId = (order._id as unknown as Types.ObjectId).toString();
-    const storefrontUrl = this.config.get<string>("storefront.baseUrl", "http://localhost:3000");
+    const storefrontUrl = this.config.get<string>(
+      "storefront.baseUrl",
+      "http://localhost:3000",
+    );
 
     const session = await this.stripe.checkout.sessions.create(
       {
@@ -104,10 +106,7 @@ export class StripeService {
    * Verifies the Stripe webhook signature and dispatches to the event handler.
    * Raw body must be passed exactly as received (NestJS rawBody: true).
    */
-  async handleStripeWebhook(
-    rawBody: Buffer,
-    signature: string,
-  ): Promise<void> {
+  async handleStripeWebhook(rawBody: Buffer, signature: string): Promise<void> {
     this.assertEnabled();
 
     let event: Stripe.Event;
@@ -152,12 +151,37 @@ export class StripeService {
             const order = await this.resolveOrder(session.client_reference_id);
             if (order) {
               orderId = (order._id as unknown as Types.ObjectId).toString();
-              await this.orderService.markPaid(orderId, eventId);
-              for (const item of order.items) {
-                await this.inventoryService.commitReservedStock(
-                  item.productId,
-                  item.qty,
+
+              // Amount/currency assertion (spec §7.3, A6, A12)
+              const expectedAmount =
+                order.chargeTotal ?? Math.round(order.total * 100);
+              const expectedCurrency = (
+                order.chargeCurrency ?? "NGN"
+              ).toLowerCase();
+              const actualAmount = session.amount_total ?? undefined;
+              const actualCurrency = session.currency ?? undefined;
+
+              if (actualAmount != null && actualAmount !== expectedAmount) {
+                await this.orderService.flagPayment(
+                  orderId,
+                  `Amount mismatch: expected ${expectedAmount}, got ${actualAmount}`,
                 );
+              } else if (
+                actualCurrency &&
+                actualCurrency !== expectedCurrency
+              ) {
+                await this.orderService.flagPayment(
+                  orderId,
+                  `Currency mismatch: expected ${expectedCurrency}, got ${actualCurrency}`,
+                );
+              } else {
+                await this.orderService.markPaid(orderId, eventId);
+                for (const item of order.items) {
+                  await this.inventoryService.commitReservedStock(
+                    item.productId,
+                    item.qty,
+                  );
+                }
               }
             }
           }

@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
 import { Cart, CartDocument, CartLineEmbedded } from "./schemas/cart.schema";
@@ -18,7 +22,10 @@ export class CartService {
 
   // ─── Resolve or create cart ───────────────────────────────────────────────
 
-  async getOrCreate(userId: string | null, guestId: string | null): Promise<CartDocument> {
+  async getOrCreate(
+    userId: string | null,
+    guestId: string | null,
+  ): Promise<CartDocument> {
     const query = userId ? { userId } : { guestId };
     let cart = await this.cartModel.findOne(query);
     if (!cart) {
@@ -39,13 +46,19 @@ export class CartService {
 
   // ─── Add / update / remove lines ─────────────────────────────────────────
 
-  async addToCart(userId: string | null, guestId: string | null, dto: AddToCartDto) {
+  async addToCart(
+    userId: string | null,
+    guestId: string | null,
+    dto: AddToCartDto,
+  ) {
     const product = await this.productModel.findById(dto.productId).lean();
     if (!product) throw new NotFoundException("Product not found");
-    if (product.status !== "active") throw new BadRequestException("Product is not available");
+    if (product.status !== "active")
+      throw new BadRequestException("Product is not available");
 
     const available = product.stock - product.reserved;
-    if (available <= 0) throw new BadRequestException(`"${product.title}" is out of stock`);
+    if (available <= 0)
+      throw new BadRequestException(`"${product.title}" is out of stock`);
 
     const cart = await this.getOrCreate(userId, guestId);
     const existing = cart.lines.find((l) => l.productId === dto.productId);
@@ -53,12 +66,18 @@ export class CartService {
     if (existing) {
       const newQty = existing.quantity + dto.quantity;
       if (newQty > available)
-        throw new BadRequestException(`Only ${available} unit(s) available for "${product.title}"`);
+        throw new BadRequestException(
+          `Only ${available} unit(s) available for "${product.title}"`,
+        );
       existing.quantity = newQty;
       existing.unitPrice = product.price; // refresh price on add
+      existing.weightGrams = product.packageWeightGrams ?? 0;
+      existing.dims = product.packageDims ?? null;
     } else {
       if (dto.quantity > available)
-        throw new BadRequestException(`Only ${available} unit(s) available for "${product.title}"`);
+        throw new BadRequestException(
+          `Only ${available} unit(s) available for "${product.title}"`,
+        );
       cart.lines.push({
         productId: dto.productId,
         sku: product.sku,
@@ -66,6 +85,8 @@ export class CartService {
         image: product.images[0] ?? "",
         unitPrice: product.price,
         quantity: dto.quantity,
+        weightGrams: product.packageWeightGrams ?? 0,
+        dims: product.packageDims ?? null,
       } as CartLineEmbedded);
     }
 
@@ -75,7 +96,11 @@ export class CartService {
     return this.buildResponse(cart);
   }
 
-  async updateLine(userId: string | null, guestId: string | null, dto: UpdateLineDto) {
+  async updateLine(
+    userId: string | null,
+    guestId: string | null,
+    dto: UpdateLineDto,
+  ) {
     const cart = await this.getOrCreate(userId, guestId);
     if (dto.quantity === 0) {
       cart.lines = cart.lines.filter((l) => l.productId !== dto.productId);
@@ -97,7 +122,11 @@ export class CartService {
     return this.buildResponse(cart);
   }
 
-  async removeLine(userId: string | null, guestId: string | null, productId: string) {
+  async removeLine(
+    userId: string | null,
+    guestId: string | null,
+    productId: string,
+  ) {
     const cart = await this.getOrCreate(userId, guestId);
     cart.lines = cart.lines.filter((l) => l.productId !== productId);
     cart.markModified("lines");
@@ -132,7 +161,9 @@ export class CartService {
 
     // Merge lines — guest quantity wins for matching products
     for (const guestLine of guestCart.lines) {
-      const existing = userCart.lines.find((l) => l.productId === guestLine.productId);
+      const existing = userCart.lines.find(
+        (l) => l.productId === guestLine.productId,
+      );
       if (existing) {
         existing.quantity = Math.max(existing.quantity, guestLine.quantity);
       } else {
@@ -149,7 +180,10 @@ export class CartService {
   // ─── Response builder ─────────────────────────────────────────────────────
 
   private buildResponse(cart: CartDocument) {
-    const subtotal = cart.lines.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0);
+    const subtotal = cart.lines.reduce(
+      (sum, l) => sum + l.unitPrice * l.quantity,
+      0,
+    );
     const discount = cart.discountAmount ?? 0;
     return {
       id: (cart._id as unknown as Types.ObjectId).toString(),

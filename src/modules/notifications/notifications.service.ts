@@ -4,6 +4,25 @@ import { Resend } from "resend";
 import { OrderDocument } from "../order/schemas/order.schema";
 import { CustomOrderDocument } from "../custom-order/schemas/custom-order.schema";
 
+// ─── Shipping notification helpers ───────────────────────────────────────────
+
+/** Shared Labi email shell (dark theme, gold accent). */
+function labiShell(body: string): string {
+  return `<!DOCTYPE html>
+<html>
+<body style="font-family:'DM Sans',Arial,sans-serif;color:#f5f5f5;background:#0f0f0f;max-width:600px;margin:0 auto;padding:24px">
+  <p style="font-size:22px;font-weight:700;letter-spacing:0.25em;color:#FED700;margin-bottom:4px">LABI</p>
+  ${body}
+  <hr style="border:none;border-top:1px solid #333;margin:24px 0">
+  <p style="font-size:11px;color:#666">Labi Fashion · Lagos, Nigeria</p>
+</body>
+</html>`;
+}
+
+function goldBtn(href: string, label: string): string {
+  return `<a href="${href}" style="display:inline-block;background:#FED700;color:#000;padding:12px 28px;text-decoration:none;font-size:12px;letter-spacing:0.15em;text-transform:uppercase;font-weight:600;margin-top:16px">${label}</a>`;
+}
+
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
@@ -382,6 +401,227 @@ export class NotificationsService {
     await this.send(
       to,
       subjects[newStage] ?? `Production update — ${order.referenceNumber}`,
+      html,
+    );
+  }
+
+  // ─── Shipping: quote requested (admin alert) ──────────────────────────────
+
+  /**
+   * Sent to admin alert email(s) when an order enters AWAITING_SHIPPING_QUOTE.
+   * Gives a direct link to the admin quotes queue.
+   */
+  async sendShippingQuoteRequested(order: OrderDocument): Promise<void> {
+    const adminEmails = this.config
+      .get<string>("shipping.adminAlertEmails", "")
+      .split(",")
+      .map((e) => e.trim())
+      .filter(Boolean);
+    if (!adminEmails.length) {
+      this.logger.warn(
+        "No ADMIN_ALERT_EMAILS configured — skipping quote-requested alert",
+      );
+      return;
+    }
+
+    const quotesUrl = `${this.storefrontUrl.replace(/\/$/, "")}/admin/shipping/quotes`;
+    const html = labiShell(`
+      <h1 style="font-size:18px;margin-bottom:4px">Shipping quote needed</h1>
+      <p style="color:#999">A new order is waiting for a shipping fee quote.</p>
+      <div style="background:#1a1a1a;border:1px solid #333;padding:16px;margin:16px 0">
+        <p style="margin:0 0 6px"><strong>Order:</strong> ${order.orderNumber}</p>
+        <p style="margin:0 0 6px"><strong>Customer:</strong> ${order.customerName ?? "Guest"} (${order.customerEmail ?? "—"})</p>
+        <p style="margin:0 0 6px"><strong>Destination:</strong> ${order.shippingAddress?.city ?? "—"}, ${order.shippingAddress?.country ?? "—"}</p>
+        <p style="margin:0"><strong>Zone:</strong> ${order.shippingZoneName ?? "—"}</p>
+      </div>
+      ${goldBtn(quotesUrl, "Go to Quotes Queue")}
+    `);
+
+    for (const to of adminEmails) {
+      await this.send(to, `Quote needed — Order ${order.orderNumber}`, html);
+    }
+  }
+
+  // ─── Shipping: SLA overdue (admin alert) ──────────────────────────────────
+
+  /**
+   * Sent to admins when the configured SLA window passes with no quote submitted.
+   */
+  async sendShippingQuoteSlaAlert(order: OrderDocument): Promise<void> {
+    const adminEmails = this.config
+      .get<string>("shipping.adminAlertEmails", "")
+      .split(",")
+      .map((e) => e.trim())
+      .filter(Boolean);
+    if (!adminEmails.length) return;
+
+    const quotesUrl = `${this.storefrontUrl.replace(/\/$/, "")}/admin/shipping/quotes`;
+    const html = labiShell(`
+      <h1 style="font-size:18px;margin-bottom:4px;color:#FED700">⚠️ Shipping quote overdue</h1>
+      <p style="color:#bbb">The SLA window has passed for the following order. Please submit a quote as soon as possible.</p>
+      <div style="background:#1a1a1a;border:1px solid #c0392b;padding:16px;margin:16px 0">
+        <p style="margin:0 0 6px"><strong>Order:</strong> ${order.orderNumber}</p>
+        <p style="margin:0 0 6px"><strong>Customer:</strong> ${order.customerName ?? "Guest"}</p>
+        <p style="margin:0"><strong>Requested at:</strong> ${order.shippingQuote?.requestedAt?.toISOString() ?? "—"}</p>
+      </div>
+      ${goldBtn(quotesUrl, "Submit Quote Now")}
+    `);
+
+    for (const to of adminEmails) {
+      await this.send(
+        to,
+        `OVERDUE: Shipping quote for ${order.orderNumber}`,
+        html,
+      );
+    }
+  }
+
+  // ─── Shipping: quote ready (customer) ────────────────────────────────────
+
+  /**
+   * Sent to the customer when an admin submits a shipping quote.
+   * Includes the full breakdown (items, shipping, carrier, ETA, note)
+   * and a pay link.
+   */
+  async sendShippingQuoteReady(order: OrderDocument): Promise<void> {
+    const to = order.customerEmail;
+    if (!to) return;
+
+    const quote = order.shippingQuote;
+    const payUrl = `${this.storefrontUrl.replace(/\/$/, "")}/orders/${(order._id as unknown as { toString(): string }).toString()}/pay`;
+    const itemsTotal = (order.total ?? 0) - (order.shippingFee ?? 0);
+    const currency = order.chargeCurrency ?? "NGN";
+
+    const html = labiShell(`
+      <h1 style="font-size:20px;margin-bottom:4px">Your shipping quote is ready</h1>
+      <p style="color:#999">Hi ${order.customerName ?? "there"}, your order is ready for payment including shipping.</p>
+      <div style="background:#1a1a1a;border:1px solid #333;padding:16px;margin:16px 0">
+        <p style="margin:0 0 6px"><strong>Order:</strong> ${order.orderNumber}</p>
+        <p style="margin:0 0 6px"><strong>Items total:</strong> ${currency} ${itemsTotal.toLocaleString()}</p>
+        <p style="margin:0 0 6px"><strong>Shipping fee:</strong>
+          <span style="color:#FED700">${currency} ${(order.shippingFee ?? 0).toLocaleString()}</span>
+        </p>
+        ${quote?.carrier ? `<p style="margin:0 0 6px"><strong>Carrier:</strong> ${quote.carrier}</p>` : ""}
+        ${quote?.etaDays ? `<p style="margin:0 0 6px"><strong>Est. delivery:</strong> ${quote.etaDays} days</p>` : ""}
+        ${quote?.validUntil ? `<p style="margin:0 0 6px"><strong>Quote valid until:</strong> ${new Date(quote.validUntil).toLocaleDateString("en-NG", { dateStyle: "medium" })}</p>` : ""}
+        <p style="margin:8px 0 0;border-top:1px solid #333;padding-top:8px;font-size:16px;font-weight:700">
+          <strong>Total:</strong>
+          <span style="color:#FED700">${currency} ${(order.total ?? 0).toLocaleString()}</span>
+        </p>
+        ${quote?.note ? `<p style="margin:8px 0 0;color:#aaa;font-size:13px">${quote.note}</p>` : ""}
+      </div>
+      ${goldBtn(payUrl, "Pay Now")}
+      <p style="font-size:12px;color:#666;margin-top:12px">This quote expires on ${quote?.validUntil ? new Date(quote.validUntil).toLocaleDateString("en-NG", { dateStyle: "long" }) : "—"}.</p>
+    `);
+
+    await this.send(to, `Shipping quote ready — ${order.orderNumber}`, html);
+  }
+
+  // ─── Shipping: quote expiring reminder (customer) ─────────────────────────
+
+  /**
+   * Sent 24 h before the quote expires. Nudges the customer to pay.
+   */
+  async sendShippingQuoteExpiring(order: OrderDocument): Promise<void> {
+    const to = order.customerEmail;
+    if (!to) return;
+
+    const payUrl = `${this.storefrontUrl.replace(/\/$/, "")}/orders/${(order._id as unknown as { toString(): string }).toString()}/pay`;
+    const validUntil = order.shippingQuote?.validUntil;
+
+    const html = labiShell(`
+      <h1 style="font-size:18px;margin-bottom:4px">Your shipping quote expires soon</h1>
+      <p style="color:#999">Hi ${order.customerName ?? "there"}, your shipping quote for order <strong>${order.orderNumber}</strong> expires in 24 hours.</p>
+      ${validUntil ? `<p style="color:#FED700">Expires: ${new Date(validUntil).toLocaleString("en-NG")}</p>` : ""}
+      <p style="color:#ccc">Complete payment before it expires to keep your reservation and shipping rate.</p>
+      ${goldBtn(payUrl, "Pay Now")}
+    `);
+
+    await this.send(to, `Your quote expires soon — ${order.orderNumber}`, html);
+  }
+
+  // ─── Shipping: quote expired (customer) ──────────────────────────────────
+
+  /**
+   * Sent when the quote expires unpaid. Offers a re-quote link.
+   */
+  async sendShippingQuoteExpired(order: OrderDocument): Promise<void> {
+    const to = order.customerEmail;
+    if (!to) return;
+
+    const requoteUrl = `${this.storefrontUrl.replace(/\/$/, "")}/orders/${(order._id as unknown as { toString(): string }).toString()}`;
+
+    const html = labiShell(`
+      <h1 style="font-size:18px;margin-bottom:4px">Your shipping quote has expired</h1>
+      <p style="color:#999">Hi ${order.customerName ?? "there"}, the shipping quote for order <strong>${order.orderNumber}</strong> has expired.</p>
+      <p style="color:#ccc">You can request a new quote from your order page. We will get back to you promptly.</p>
+      ${goldBtn(requoteUrl, "Request New Quote")}
+    `);
+
+    await this.send(to, `Shipping quote expired — ${order.orderNumber}`, html);
+  }
+
+  // ─── Shipping: quote requested (admin alert) ──────────────────────────────
+
+  async sendShippingQuoteRequested(order: OrderDocument): Promise<void> {
+    const adminEmails = this.config
+      .get<string>("shipping.adminAlertEmails", "")
+      .split(",")
+      .map((e) => e.trim())
+      .filter(Boolean);
+    if (!adminEmails.length) return;
+
+    const quotesUrl = `${this.storefrontUrl.replace(/\/$/, "")}/admin/shipping/quotes`;
+    const html = labiShell(`
+      <h1 style="font-size:18px;margin-bottom:4px;color:#FED700">New shipping quote needed</h1>
+      <p style="color:#bbb">A customer has placed an order that requires a shipping quote.</p>
+      <div style="background:#1a1a1a;border:1px solid #333;padding:16px;margin:16px 0">
+        <p style="margin:0 0 6px"><strong>Order:</strong> ${order.orderNumber}</p>
+        <p style="margin:0 0 6px"><strong>Customer:</strong> ${order.customerName ?? "Guest"}</p>
+        <p style="margin:0 0 6px"><strong>Destination:</strong> ${order.shippingAddress?.country ?? "—"}</p>
+        <p style="margin:0"><strong>Requested at:</strong> ${order.shippingQuote?.requestedAt?.toISOString() ?? new Date().toISOString()}</p>
+      </div>
+      ${goldBtn(quotesUrl, "Submit Quote")}
+    `);
+
+    for (const to of adminEmails) {
+      await this.send(to, `Quote needed — Order ${order.orderNumber}`, html);
+    }
+  }
+
+  // ─── Shipping: adjustment (customer) ──────────────────────────────────────
+
+  async sendShippingAdjustment(
+    order: OrderDocument,
+    type: "refund" | "extra_charge",
+    amount: number,
+    reason: string,
+  ): Promise<void> {
+    const to = order.customerEmail;
+    if (!to) return;
+
+    const isRefund = type === "refund";
+    const currency = order.chargeCurrency ?? "NGN";
+    const html = labiShell(`
+      <h1 style="font-size:18px;margin-bottom:4px;color:#FED700">
+        ${isRefund ? "Shipping refund processed" : "Additional shipping payment required"}
+      </h1>
+      <p style="color:#999">Hi ${order.customerName ?? "there"},</p>
+      <p style="color:#ccc">
+        ${
+          isRefund
+            ? `A refund of <strong style="color:#FED700">${currency} ${amount.toLocaleString()}</strong> has been processed for your order <strong>${order.orderNumber}</strong>.`
+            : `An additional shipping payment of <strong style="color:#FED700">${currency} ${amount.toLocaleString()}</strong> is required for your order <strong>${order.orderNumber}</strong>.`
+        }
+      </p>
+      <p style="color:#aaa;font-size:13px">Reason: ${reason}</p>
+    `);
+
+    await this.send(
+      to,
+      isRefund
+        ? `Shipping refund — ${order.orderNumber}`
+        : `Additional shipping payment — ${order.orderNumber}`,
       html,
     );
   }

@@ -93,4 +93,25 @@ export default () => ({
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
     enabled: process.env.STRIPE_ENABLED ?? "false",
   },
+
+  /**
+   * Shipping — zones, quotes, and SLA configuration.
+   *
+   * SHIPPING_QUOTE_SLA_HOURS: hours within which an admin must submit a quote.
+   * SHIPPING_QUOTE_VALID_DAYS: default validity window for a submitted quote.
+   * ADMIN_ALERT_EMAILS: comma-separated list of admin emails for quote alerts.
+   * ORDER_LINK_SECRET: HMAC secret for signing guest pay links.
+   * SHIPPING_QUOTE_AMOUNT_CAP: upper limit on a single quote amount (NGN kobo),
+   *   to catch typos like an extra zero.
+   */
+  shipping: {
+    quoteSlaHours: parseInt(process.env.SHIPPING_QUOTE_SLA_HOURS ?? "24", 10),
+    quoteValidDays: parseInt(process.env.SHIPPING_QUOTE_VALID_DAYS ?? "7", 10),
+    adminAlertEmails: process.env.ADMIN_ALERT_EMAILS ?? "",
+    orderLinkSecret: process.env.ORDER_LINK_SECRET ?? "change-me-in-production",
+    quoteAmountCapNgn: parseInt(
+      process.env.SHIPPING_QUOTE_AMOUNT_CAP ?? "50000000",
+      10,
+    ),
+  },
 });

@@ -1,8 +1,10 @@
 import {
   IsArray,
   IsEnum,
+  IsInt,
   IsNotEmpty,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   Min,
@@ -13,12 +15,35 @@ import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { ProductTag, ProductStatus } from "../schemas/product.schema";
 
 export class SpecInputDto {
-  @ApiProperty({ example: "Screen Size" }) @IsString() @IsNotEmpty() label: string;
+  @ApiProperty({ example: "Screen Size" })
+  @IsString()
+  @IsNotEmpty()
+  label: string;
   @ApiProperty({ example: '55"' }) @IsString() @IsNotEmpty() value: string;
 }
 
+export class PackageDimsDto {
+  @ApiProperty({ example: 60, description: "Length in cm" })
+  @IsNumber()
+  @Min(0)
+  l: number;
+
+  @ApiProperty({ example: 40, description: "Width in cm" })
+  @IsNumber()
+  @Min(0)
+  w: number;
+
+  @ApiProperty({ example: 10, description: "Height in cm" })
+  @IsNumber()
+  @Min(0)
+  h: number;
+}
+
 export class CreateProductDto {
-  @ApiProperty({ example: "AV-1000", description: "Unique SKU — immutable once set" })
+  @ApiProperty({
+    example: "AV-1000",
+    description: "Unique SKU — immutable once set",
+  })
   @IsString()
   @IsNotEmpty()
   sku: string;
@@ -28,12 +53,18 @@ export class CreateProductDto {
   @IsNotEmpty()
   title: string;
 
-  @ApiProperty({ example: "64a1f2c8e3b7a900120d5678", description: "Brand ObjectId" })
+  @ApiProperty({
+    example: "64a1f2c8e3b7a900120d5678",
+    description: "Brand ObjectId",
+  })
   @IsString()
   @IsNotEmpty()
   brandId: string;
 
-  @ApiProperty({ example: "64a1f2c8e3b7a900120d4321", description: "Category ObjectId" })
+  @ApiProperty({
+    example: "64a1f2c8e3b7a900120d4321",
+    description: "Category ObjectId",
+  })
   @IsString()
   @IsNotEmpty()
   categoryId: string;
@@ -51,7 +82,10 @@ export class CreateProductDto {
   @Min(0)
   price: number;
 
-  @ApiPropertyOptional({ example: 699000, description: 'Crossed-out "was" price in NGN' })
+  @ApiPropertyOptional({
+    example: 699000,
+    description: 'Crossed-out "was" price in NGN',
+  })
   @IsOptional()
   @IsNumber()
   @Min(0)
@@ -63,7 +97,10 @@ export class CreateProductDto {
   @Min(0)
   stock?: number;
 
-  @ApiPropertyOptional({ type: [String], example: ["https://res.cloudinary.com/..."] })
+  @ApiPropertyOptional({
+    type: [String],
+    example: ["https://res.cloudinary.com/..."],
+  })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
@@ -86,14 +123,43 @@ export class CreateProductDto {
   @Type(() => SpecInputDto)
   specs?: SpecInputDto[];
 
-  @ApiPropertyOptional({ enum: ["active", "draft", "archived"], default: "draft" })
+  @ApiPropertyOptional({
+    enum: ["active", "draft", "archived"],
+    default: "draft",
+  })
   @IsOptional()
   @IsEnum(["active", "draft", "archived"])
   status?: ProductStatus;
 
-  @ApiPropertyOptional({ type: [String], enum: ["new_arrival", "best_seller", "featured", "deal"] })
+  @ApiPropertyOptional({
+    type: [String],
+    enum: ["new_arrival", "best_seller", "featured", "deal"],
+  })
   @IsOptional()
   @IsArray()
   @IsEnum(["new_arrival", "best_seller", "featured", "deal"], { each: true })
   tags?: ProductTag[];
+
+  // ── Shipping weight / dimensions ───────────────────────────────────────────
+
+  @ApiPropertyOptional({
+    example: 850,
+    description:
+      "Packed weight in grams. Required for accurate shipping fee calculation.",
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  packageWeightGrams?: number;
+
+  @ApiPropertyOptional({
+    type: PackageDimsDto,
+    description:
+      "Outer packed dimensions in cm (l × w × h). Used for volumetric weight.",
+  })
+  @IsOptional()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => PackageDimsDto)
+  packageDims?: PackageDimsDto;
 }

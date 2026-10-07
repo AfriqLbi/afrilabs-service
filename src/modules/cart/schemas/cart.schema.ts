@@ -10,6 +10,16 @@ export class CartLineEmbedded {
   @Prop({ required: true }) image: string;
   @Prop({ required: true, min: 0 }) unitPrice: number;
   @Prop({ required: true, min: 1 }) quantity: number;
+  /** Packed weight in grams — copied from product.packageWeightGrams at add-time */
+  @Prop({ type: Number, default: 0 })
+  weightGrams: number;
+  /** Packed dimensions in cm — copied from product.packageDims at add-time */
+  @Prop({
+    type: { l: Number, w: Number, h: Number },
+    default: null,
+    _id: false,
+  })
+  dims: { l: number; w: number; h: number } | null;
 }
 
 @Schema({ timestamps: true, collection: "carts" })
