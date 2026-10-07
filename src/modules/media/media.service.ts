@@ -74,19 +74,14 @@ export class MediaService {
     timestamp: number;
     signature: string;
     folder: string;
-    format: string;
-    quality: string;
   } {
     const timestamp = Math.round(Date.now() / 1000);
-    const format = "auto";
-    const quality = "auto";
 
-    // Sign only the fields we actually POST to Cloudinary.
-    // Do NOT include `transformation` — it causes "Invalid transformation
-    // component" errors when passed as a plain string in a signed upload.
-    // Resizing is applied at display time via Cloudinary URL transformations.
+    // Sign only the fields the browser will POST alongside the file.
+    // Keep this minimal — every extra param must be included in both the
+    // signature AND the FormData or Cloudinary will reject with "Invalid Signature".
     const signature = cloudinary.utils.api_sign_request(
-      { folder, format, quality, timestamp },
+      { folder, timestamp },
       this.config.get<string>("cloudinary.apiSecret")!,
     );
 
@@ -96,8 +91,6 @@ export class MediaService {
       timestamp,
       signature,
       folder,
-      format,
-      quality,
     };
   }
 
