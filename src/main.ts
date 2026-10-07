@@ -2,49 +2,43 @@ import { NestFactory } from "@nestjs/core";
 import { ValidationPipe, VersioningType } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
-import { json, urlencoded } from "express";
+import {
+  json,
+  urlencoded,
+  type Request,
+  type Response,
+  type NextFunction,
+} from "express";
 import * as cookieParser from "cookie-parser";
 import { AppModule } from "./app.module";
 import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
 import { TransformInterceptor } from "./common/interceptors/transform.interceptor";
 
 async function bootstrap() {
-  // rawBody: true  — NestJS captures req.rawBody for webhook HMAC verification.
-  // bodyParser: false — we register our own json/urlencoded parsers below so we
-  //   can set a 10 MB limit, which covers bulk CSV sync payloads (the default is
-  //   100 kb and causes "request entity too large" when uploading large files).
+  /**
+   * rawBody: true  — NestJS v10 captures req.rawBody for webhook HMAC verification.
+   *                  Requires the built-in body parser to be enabled (no bodyParser:false).
+   *
+   * After NestFactory.create we register our own json/urlencoded parsers with
+   * a 10 MB limit to override the 100 kb default. These parsers explicitly skip
+   * multipart/form-data requests so Multer (FileInterceptor) can read the stream
+   * unmodified. This was the root cause of the 500 on /admin/media/upload.
+   */
   const app = await NestFactory.create(AppModule, {
     rawBody: true,
-    bodyParser: false,
   });
 
-  // Register body parsers with a 10 MB ceiling BEFORE all other middleware.
-  // IMPORTANT: Skip json/urlencoded for multipart/form-data requests so that
-  // multer (used by FileInterceptor) can read the stream unmodified.
-  // Without this guard, the json middleware consumes the stream and multer
-  // gets an empty body → 500 Internal Server Error on file uploads.
-  app.use(
-    (
-      req: import("express").Request,
-      res: import("express").Response,
-      next: import("express").NextFunction,
-    ) => {
-      const ct = req.headers["content-type"] ?? "";
-      if (ct.startsWith("multipart/form-data")) return next();
-      json({ limit: "10mb" })(req, res, next);
-    },
-  );
-  app.use(
-    (
-      req: import("express").Request,
-      res: import("express").Response,
-      next: import("express").NextFunction,
-    ) => {
-      const ct = req.headers["content-type"] ?? "";
-      if (ct.startsWith("multipart/form-data")) return next();
-      urlencoded({ limit: "10mb", extended: true })(req, res, next);
-    },
-  );
+  // Raise body size limit to 10 MB; skip multipart so Multer works correctly.
+  const skipMultipart =
+    (handler: ReturnType<typeof json> | ReturnType<typeof urlencoded>) =>
+    (req: Request, res: Response, next: NextFunction) => {
+      const ct = (req.headers["content-type"] ?? "").toLowerCase();
+      if (ct.includes("multipart/form-data")) return next();
+      return handler(req, res, next);
+    };
+
+  app.use(skipMultipart(json({ limit: "10mb" })));
+  app.use(skipMultipart(urlencoded({ limit: "10mb", extended: true })));
   app.use(cookieParser());
 
   const config = app.get(ConfigService);
@@ -83,80 +77,38 @@ async function bootstrap() {
     }),
   );
 
-  // ── Response envelope — { success: true, data: ... } ─────────────────────────
+  // ── Response envelope ─────────────────────────────────────────────────────────
   app.useGlobalInterceptors(new TransformInterceptor());
 
-  // ── Exception filter — { success: false, statusCode, message, path } ─────────
+  // ── Exception filter ──────────────────────────────────────────────────────────
   app.useGlobalFilters(new HttpExceptionFilter());
 
-  // ── URI versioning — all routes under /v1/ ────────────────────────────────────
+  // ── URI versioning ────────────────────────────────────────────────────────────
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: "1" });
 
-  // ── Swagger / OpenAPI ────────────────────────────────────────────────────────
+  // ── Swagger ───────────────────────────────────────────────────────────────────
   const swaggerEnabled =
     nodeEnv !== "production" ||
     config.get<string>("SWAGGER_ENABLED", "false") === "true";
 
   if (swaggerEnabled) {
     const swaggerConfig = new DocumentBuilder()
-      .setTitle("Alphavista Electronics API")
-      .setDescription(
-        `## Overview
-REST API for the Alphavista Electronics e-commerce platform.
-
-### Authentication
-Obtain a **Bearer JWT** from \`POST /v1/auth/login\`, then pass it as:
-\`Authorization: Bearer <accessToken>\`
-
-### Response envelope
-\`\`\`json
-{ "success": true, "data": { ... } }
-\`\`\`
-Errors:
-\`\`\`json
-{ "success": false, "statusCode": 400, "message": "...", "path": "/v1/..." }
-\`\`\`
-
-### Guest cart
-Pass a client-generated UUID in every unauthenticated cart request:
-\`X-Guest-Id: f47ac10b-58cc-4372-a567-0e02b2c3d479\`
-Call \`POST /v1/cart/merge\` immediately after login.
-
-### Versioning
-All routes are prefixed with \`/v1/\`.`,
-      )
+      .setTitle("Labi API")
+      .setDescription("LÁBí Fashion Platform API")
       .setVersion("1.0")
-      .setContact("Alphavista Dev", storefrontUrl, "dev@alphavista.ng")
+      .setContact("Labi Dev", storefrontUrl, "dev@labiafrica.com")
       .addServer(`http://localhost:${port}`, "Local development")
-      .addServer("https://ave-service.onrender.com", "Production (Render)")
-      // Name MUST be "bearer" — that is the implicit default NestJS uses when
-      // controllers call @ApiBearerAuth() with no argument. Changing the name
-      // here instead of every controller keeps all files in sync automatically.
+      .addServer("https://api.labiafrica.com", "Production")
       .addBearerAuth(
         {
           type: "http",
           scheme: "bearer",
           bearerFormat: "JWT",
           name: "Authorization",
-          description:
-            "Paste the <code>accessToken</code> from <code>POST /v1/auth/login</code>. " +
-            "Click the global <strong>Authorize</strong> button at the top — it applies to every locked endpoint at once.",
           in: "header",
         },
         "bearer",
       )
-      .addApiKey(
-        {
-          type: "apiKey",
-          in: "header",
-          name: "X-Guest-Id",
-          description: "Client-generated UUID for anonymous cart operations",
-        },
-        "guestId",
-      )
-      // Apply bearer globally — every endpoint that has @ApiBearerAuth() will
-      // automatically inherit the token set in the top-level Authorize dialog.
-      // Public endpoints override this with @ApiSecurity([]) if needed.
       .addSecurityRequirements("bearer")
       .build();
 
@@ -166,31 +118,20 @@ All routes are prefixed with \`/v1/\`.`,
     });
 
     SwaggerModule.setup("docs", app, document, {
-      customSiteTitle: "Alphavista API Docs",
-      customCss: `
-        .swagger-ui .topbar { background: #111827; }
-        .swagger-ui .topbar-wrapper img { content: url(''); width: 0; }
-        .swagger-ui .topbar-wrapper::after {
-          content: 'Alphavista Electronics API';
-          color: #f9fafb; font-size: 1.1rem; font-weight: 600; margin-left: 12px;
-        }
-      `,
+      customSiteTitle: "Labi API Docs",
       swaggerOptions: {
-        persistAuthorization: true, // token survives page refresh
+        persistAuthorization: true,
         displayRequestDuration: true,
         filter: true,
         docExpansion: "none",
-        tagsSorter: "alpha",
-        operationsSorter: "alpha",
-        defaultModelsExpandDepth: 2,
-        tryItOutEnabled: true, // "Try it out" open by default
+        tryItOutEnabled: true,
       },
     });
 
     console.log(`📖  Swagger docs  → http://localhost:${port}/docs\n`);
   }
 
-  // ── Health check ─────────────────────────────────────────────────────────────
+  // ── Health check ──────────────────────────────────────────────────────────────
   const httpAdapter = app.getHttpAdapter();
   httpAdapter.get(
     "/health",
@@ -207,9 +148,8 @@ All routes are prefixed with \`/v1/\`.`,
     },
   );
 
-  // ── Start listening ───────────────────────────────────────────────────────────
   await app.listen(port, "0.0.0.0");
-  console.log(`\n🚀  Alphavista API → http://localhost:${port}`);
+  console.log(`\n🚀  Labi API → http://localhost:${port}`);
   console.log(`❤️   Health check  → http://localhost:${port}/health`);
 }
 
