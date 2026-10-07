@@ -1,5 +1,6 @@
-import { Controller, Get, Headers, Ip } from "@nestjs/common";
+import { Controller, Get, Headers, Ip, Req } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
+import { Request } from "express";
 import { GeoCurrencyService } from "./geo-currency.service";
 import { GeoContextDto } from "./dto/geo-context.dto";
 import { ApiEnvelopeOk } from "../../common/swagger/api-response.decorator";
@@ -40,7 +41,20 @@ export class GeoContextController {
   getGeoContext(
     @Ip() ip: string,
     @Headers("x-geo-country") xGeoCountry?: string,
+    @Headers("x-vercel-ip-country") vercelCountry?: string,
+    @Headers("cf-ipcountry") cfCountry?: string,
+    @Req() req?: Request,
   ): Promise<GeoContextDto> {
-    return this.service.getGeoContext(ip, xGeoCountry);
+    // CDN / proxy country headers take precedence over IP lookup
+    const cdnCountry = xGeoCountry ?? vercelCountry ?? cfCountry;
+
+    // Resolve the real client IP: x-forwarded-for (set when trust proxy=1)
+    // beats the socket address which may be the load-balancer's internal IP.
+    const forwarded = req?.headers?.["x-forwarded-for"];
+    const realIp =
+      (typeof forwarded === "string" ? forwarded.split(",")[0].trim() : null) ??
+      ip;
+
+    return this.service.getGeoContext(realIp, cdnCountry);
   }
 }

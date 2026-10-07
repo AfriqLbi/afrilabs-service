@@ -36,6 +36,11 @@ async function bootstrap() {
    */
   const app = await NestFactory.create(AppModule);
 
+  // Trust the first upstream proxy (Render load balancer / Vercel edge) so
+  // that @Ip() and req.ip return the real client IP from x-forwarded-for
+  // instead of the proxy's internal address.
+  app.getHttpAdapter().getInstance().set("trust proxy", 1);
+
   // ── 1. Raw-body capture — webhook paths only ─────────────────────────────
   // Must be registered BEFORE the json/urlencoded parsers so it wins on those
   // paths. Stores the raw Buffer on req.rawBody for HMAC verification.
