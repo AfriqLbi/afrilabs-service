@@ -52,8 +52,10 @@ export class ShippingQuoteService {
       orderId,
       {
         shippingStatus: "AWAITING_QUOTE",
-        "shippingQuote.requestedAt": new Date(),
-        "shippingQuote.state": "REQUESTED",
+        shippingQuote: {
+          requestedAt: new Date(),
+          state: "REQUESTED",
+        },
       },
       { new: true },
     );
@@ -147,15 +149,21 @@ export class ShippingQuoteService {
             shippingFeeSource: "admin_quote",
             chargeTotal: newChargeTotal,
             reservationExpiresAt: validUntil,
-            "shippingQuote.quotedAt": new Date(),
-            "shippingQuote.quotedBy": new Types.ObjectId(actorId),
-            "shippingQuote.currency": dto.currency,
-            "shippingQuote.amount": dto.amount,
-            "shippingQuote.carrier": dto.carrier ?? null,
-            "shippingQuote.etaDays": dto.etaDays ?? null,
-            "shippingQuote.note": dto.note ?? null,
-            "shippingQuote.validUntil": validUntil,
-            "shippingQuote.state": "QUOTED",
+            // Replace the whole shippingQuote subdocument in one operation.
+            // Using dot-notation on a null field causes a MongoDB error:
+            // "Cannot create field 'x' in element {shippingQuote: null}"
+            shippingQuote: {
+              requestedAt: order.shippingQuote?.requestedAt ?? new Date(),
+              quotedAt: new Date(),
+              quotedBy: new Types.ObjectId(actorId),
+              currency: dto.currency,
+              amount: dto.amount,
+              carrier: dto.carrier ?? null,
+              etaDays: dto.etaDays ?? null,
+              note: dto.note ?? null,
+              validUntil,
+              state: "QUOTED",
+            },
           },
           { new: true, session },
         ))!;
@@ -266,10 +274,13 @@ export class ShippingQuoteService {
         status: "awaiting_shipping_quote",
         shippingFee: 0,
         shippingFeeSource: null,
-        "shippingQuote.state": "SUPERSEDED",
-        "shippingQuote.note": reason,
-        "shippingQuote.quotedAt": null,
-        "shippingQuote.validUntil": null,
+        shippingQuote: {
+          requestedAt: order.shippingQuote?.requestedAt ?? new Date(),
+          state: "SUPERSEDED",
+          note: reason,
+          quotedAt: null,
+          validUntil: null,
+        },
       },
       { new: true },
     );
@@ -305,7 +316,10 @@ export class ShippingQuoteService {
     await this.orderModel.findByIdAndUpdate(orderId, {
       shippingStatus: "EXPIRED",
       status: "abandoned",
-      "shippingQuote.state": "EXPIRED",
+      shippingQuote: {
+        ...((order.shippingQuote as Record<string, unknown>) ?? {}),
+        state: "EXPIRED",
+      },
     });
 
     // Release stock holds on expiry (spec §4)
