@@ -55,7 +55,7 @@ export class CatalogService {
       ? category.subcategories?.find((s) => s.id === dto.subcategoryId)
       : null;
 
-    const slug = this.makeSlug(`${brand.name} ${dto.title}`);
+    const slug = this.makeSlug(`${brand.name} ${dto.title} ${sku}`);
 
     return this.productModel.create({
       ...dto,
