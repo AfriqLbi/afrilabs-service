@@ -135,17 +135,28 @@ export class ShippingQuoteService {
 
     try {
       await session.withTransaction(async () => {
-        // Recompute chargeTotal = (items subtotal – discount + shipping fee)
-        // The subtotal and discount are already in the charge currency's minor units.
-        // shippingFee is passed in dto.amount (minor units of chargeCurrency).
+        // dto.amount is in minor units of order.chargeCurrency (e.g. EUR cents).
+        // chargeTotal is also in chargeCurrency minor units — add directly.
         const newChargeTotal = (order.chargeTotal ?? 0) + dto.amount;
+
+        // Convert the quote fee back to NGN kobo so shippingFee is stored
+        // in a consistent unit (NGN kobo) across all order paths.
+        // For NGN orders fxRate=1, so this is a no-op beyond ×100.
+        const fxRate = order.fxRate ?? 1;
+        const fxBuffer = order.fxBuffer ?? 0;
+        // chargeAmount(minor) = ngnKobo × rate × (1+buf/100)
+        // → ngnKobo = chargeAmount / (rate × (1+buf/100))
+        const shippingFeeNgnKobo =
+          fxRate > 0
+            ? Math.round(dto.amount / (fxRate * (1 + fxBuffer / 100)))
+            : Math.round(dto.amount); // NGN fallback
 
         updated = (await this.orderModel.findByIdAndUpdate(
           orderId,
           {
             status: "pending_payment",
             shippingStatus: "QUOTED",
-            shippingFee: dto.amount,
+            shippingFee: shippingFeeNgnKobo, // stored in NGN kobo (consistent with CALCULATED path)
             shippingFeeSource: "admin_quote",
             chargeTotal: newChargeTotal,
             reservationExpiresAt: validUntil,

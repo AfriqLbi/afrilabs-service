@@ -129,8 +129,8 @@ export class OrderService {
       shippingFeeSource = "pickup";
       shippingStatus = "PICKUP";
     } else if (estimate?.status === "CALCULATED" && estimate.feeNgn != null) {
-      // Fee is in NGN kobo; convert to naira for the NGN-denominated total
-      shippingFee = estimate.feeNgn / 100;
+      // feeNgn is in NGN kobo — store as-is so shippingFee is always NGN kobo
+      shippingFee = estimate.feeNgn;
       shippingFeeSource = estimate.source ?? "rate_card";
       shippingStatus = "CALCULATED";
       chargeableWeightGrams = estimate.chargeableWeightGrams ?? null;
@@ -151,7 +151,7 @@ export class OrderService {
       shippingZoneName = estimate.zone.name ?? null;
     }
 
-    const total = Math.max(0, subtotal - discount + shippingFee);
+    const total = Math.max(0, subtotal - discount + shippingFee / 100);
 
     // 3. Resolve multi-currency values
     const chargeCurrency = dto.chargeCurrency ?? "NGN";
