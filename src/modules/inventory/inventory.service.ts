@@ -2,10 +2,10 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, ClientSession } from 'mongoose';
-import { Product, ProductDocument } from '../catalog/schemas/product.schema';
+} from "@nestjs/common";
+import { InjectModel } from "@nestjs/mongoose";
+import { Model, ClientSession } from "mongoose";
+import { Product, ProductDocument } from "../catalog/schemas/product.schema";
 
 export interface StockAdjustment {
   productId: string;
@@ -30,16 +30,17 @@ export class InventoryService {
     const result = await this.productModel.findOneAndUpdate(
       {
         _id: productId,
-        status: 'active',
+        status: "active",
         // available = stock - reserved >= qty
-        $expr: { $gte: [{ $subtract: ['$stock', '$reserved'] }, qty] },
+        $expr: { $gte: [{ $subtract: ["$stock", "$reserved"] }, qty] },
       },
       { $inc: { reserved: qty } },
       { new: true, session },
     );
     if (!result) {
       const product = await this.productModel.findById(productId).lean();
-      if (!product) throw new NotFoundException(`Product ${productId} not found`);
+      if (!product)
+        throw new NotFoundException(`Product ${productId} not found`);
       throw new ConflictException(
         `Insufficient stock for "${product.title}" — only ${product.stock - product.reserved} available`,
       );
@@ -89,13 +90,20 @@ export class InventoryService {
     qty: number,
     session?: ClientSession,
   ): Promise<void> {
+    // Use an aggregation pipeline update so we can decrement and clamp to 0
+    // in one atomic operation without the $inc + $max conflict that occurs when
+    // both operators target the same field in a classic update document.
     await this.productModel.findByIdAndUpdate(
       productId,
-      {
-        $inc: { reserved: -qty },
-        // Guard: reserved must not go below 0
-        $max: { reserved: 0 },
-      },
+      [
+        {
+          $set: {
+            reserved: {
+              $max: [{ $subtract: ["$reserved", qty] }, 0],
+            },
+          },
+        },
+      ],
       { session },
     );
   }
@@ -153,9 +161,9 @@ export class InventoryService {
   async getStockStatus(productId: string) {
     const product = await this.productModel
       .findById(productId)
-      .select('stock reserved title')
+      .select("stock reserved title")
       .lean();
-    if (!product) throw new NotFoundException('Product not found');
+    if (!product) throw new NotFoundException("Product not found");
     const available = product.stock - product.reserved;
     return {
       productId,
@@ -164,20 +172,20 @@ export class InventoryService {
       available,
       stockStatus:
         available <= 0
-          ? 'out_of_stock'
+          ? "out_of_stock"
           : available <= 5
-            ? 'low_stock'
-            : 'in_stock',
+            ? "low_stock"
+            : "in_stock",
     };
   }
 
   async getLowStockProducts(threshold = 5) {
     return this.productModel
       .find({
-        status: 'active',
-        $expr: { $lte: [{ $subtract: ['$stock', '$reserved'] }, threshold] },
+        status: "active",
+        $expr: { $lte: [{ $subtract: ["$stock", "$reserved"] }, threshold] },
       })
-      .select('title sku stock reserved images categoryName brandName')
+      .select("title sku stock reserved images categoryName brandName")
       .lean();
   }
 }

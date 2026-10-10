@@ -139,24 +139,25 @@ export class ShippingQuoteService {
         // chargeTotal is also in chargeCurrency minor units — add directly.
         const newChargeTotal = (order.chargeTotal ?? 0) + dto.amount;
 
-        // Convert the quote fee back to NGN kobo so shippingFee is stored
-        // in a consistent unit (NGN kobo) across all order paths.
-        // For NGN orders fxRate=1, so this is a no-op beyond ×100.
+        // Convert the admin-entered chargeCurrency amount back to NGN naira
+        // so shippingFee is stored in the same unit as the rest of the order
+        // (NGN naira, matching how createOrder stores it from the rate card).
+        // For NGN orders fxRate=1, fxBuffer=0 → result is dto.amount / 100 naira.
         const fxRate = order.fxRate ?? 1;
         const fxBuffer = order.fxBuffer ?? 0;
-        // chargeAmount(minor) = ngnKobo × rate × (1+buf/100)
-        // → ngnKobo = chargeAmount / (rate × (1+buf/100))
-        const shippingFeeNgnKobo =
+        // chargeMinorUnits = ngnNaira × 100 × rate × (1 + buf/100)
+        // → ngnNaira = chargeMinorUnits / (100 × rate × (1 + buf/100))
+        const shippingFeeNgnNaira =
           fxRate > 0
-            ? Math.round(dto.amount / (fxRate * (1 + fxBuffer / 100)))
-            : Math.round(dto.amount); // NGN fallback
+            ? dto.amount / (100 * fxRate * (1 + fxBuffer / 100))
+            : dto.amount / 100;
 
         updated = (await this.orderModel.findByIdAndUpdate(
           orderId,
           {
             status: "pending_payment",
             shippingStatus: "QUOTED",
-            shippingFee: shippingFeeNgnKobo, // stored in NGN kobo (consistent with CALCULATED path)
+            shippingFee: shippingFeeNgnNaira, // NGN naira — same unit as createOrder's rate-card path
             shippingFeeSource: "admin_quote",
             chargeTotal: newChargeTotal,
             reservationExpiresAt: validUntil,
