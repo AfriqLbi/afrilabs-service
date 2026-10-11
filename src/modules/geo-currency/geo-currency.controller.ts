@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation } from "@nestjs/swagger";
 import { GeoCurrencyService } from "./geo-currency.service";
 import { ApiEnvelopeOk } from "../../common/swagger/api-response.decorator";
 import { CurrencyRateDto } from "../../common/swagger/swagger-response.dto";
+import { CacheControl } from "../../common/interceptors/cache-control.interceptor";
 
 @ApiTags("FX / Currency")
 @Controller({ path: "fx", version: "1" })
@@ -10,6 +11,7 @@ export class GeoCurrencyController {
   constructor(private readonly service: GeoCurrencyService) {}
 
   @Get("rates")
+  @CacheControl("public, max-age=14400, stale-while-revalidate=900")
   @ApiOperation({
     summary: "Get all currency rates (NGN base)",
     description: `Returns all supported currencies with their NGN conversion rates, symbol, and flag emoji. The frontend \`CurrencyProvider\` should fetch this on mount and replace the hardcoded rates in \`currency.tsx\`. Rates are refreshed from exchangerate.host every 4 hours via BullMQ cron.`,

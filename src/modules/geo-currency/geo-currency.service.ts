@@ -6,6 +6,7 @@ import { Cron, CronExpression } from "@nestjs/schedule";
 import { FxRate, FxRateDocument } from "./schemas/fx-rate.schema";
 import { CurrencyConfigService } from "../currency-config/currency-config.service";
 import { GeoContextDto } from "./dto/geo-context.dto";
+import { RedisCacheService } from "../redis-cache/redis-cache.service";
 
 const SUPPORTED_CURRENCIES = ["NGN", "USD", "GBP", "EUR", "GHS", "KES", "ZAR"];
 
@@ -29,6 +30,7 @@ export class GeoCurrencyService {
     private readonly fxModel: Model<FxRateDocument>,
     private readonly config: ConfigService,
     private readonly currencyConfigService: CurrencyConfigService,
+    private readonly cache: RedisCacheService,
   ) {}
 
   // ─── Geo-Context (single-call endpoint) ────────────────────────────────────
@@ -48,7 +50,7 @@ export class GeoCurrencyService {
     ip: string,
     xGeoCountry?: string,
   ): Promise<GeoContextDto> {
-    // 1. Determine country
+    // 1. Determine country — country detection is fast but IPapi has rate limits
     let country: string;
     if (xGeoCountry && /^[A-Z]{2}$/.test(xGeoCountry.toUpperCase())) {
       country = xGeoCountry.toUpperCase();
@@ -62,35 +64,46 @@ export class GeoCurrencyService {
       country = await this.detectCountry(ip);
     }
 
-    // 2. Map country → currency (overrides first, then built-in map)
-    const currencyConfig = await this.currencyConfigService.getConfig();
-    const currency =
-      currencyConfig.countryOverrides[country] ??
-      this.countryToCurrency(country);
+    // 2. Cache the full context keyed by country for 1 hour.
+    //    Two users from the same country see the same rates + config, so
+    //    country is the right cache discriminator — not the raw IP.
+    //    TTL is 1 h (shorter than the 4 h rate refresh so users get new rates
+    //    within 1 h of a refresh).
+    return this.cache.wrap<GeoContextDto>(
+      `labi:geo:${country}`,
+      3600,
+      async () => {
+        // 2a. Map country → currency (overrides first, then built-in map)
+        const currencyConfig = await this.currencyConfigService.getConfig();
+        const currency =
+          currencyConfig.countryOverrides[country] ??
+          this.countryToCurrency(country);
 
-    // 3. Fetch all rates
-    const rates = await this.getRates();
+        // 2b. Fetch all rates (themselves cached in Redis)
+        const rates = await this.getRates();
 
-    // 4. Stale-rate check
-    const thresholdMs = currencyConfig.staleRateThresholdMinutes * 60_000;
-    const cutoff = new Date(Date.now() - thresholdMs);
-    const staleDoc = await this.fxModel
-      .findOne({ refreshedAt: { $lt: cutoff } })
-      .select("_id")
-      .lean();
-    const staleRates = !!staleDoc;
+        // 2c. Stale-rate check
+        const thresholdMs = currencyConfig.staleRateThresholdMinutes * 60_000;
+        const cutoff = new Date(Date.now() - thresholdMs);
+        const staleDoc = await this.fxModel
+          .findOne({ refreshedAt: { $lt: cutoff } })
+          .select("_id")
+          .lean();
+        const staleRates = !!staleDoc;
 
-    const response: GeoContextDto = {
-      country,
-      currency,
-      rates,
-      enabledCurrencies: currencyConfig.enabledCurrencies,
-      fxBuffer: currencyConfig.fxBuffer,
-    };
+        const response: GeoContextDto = {
+          country,
+          currency,
+          rates,
+          enabledCurrencies: currencyConfig.enabledCurrencies,
+          fxBuffer: currencyConfig.fxBuffer,
+        };
 
-    if (staleRates) response.staleRates = true;
+        if (staleRates) response.staleRates = true;
 
-    return response;
+        return response;
+      },
+    );
   }
 
   // ─── FX rates ─────────────────────────────────────────────────────────────
@@ -99,16 +112,20 @@ export class GeoCurrencyService {
   async getRates(): Promise<
     { currency: string; rate: number; symbol: string; flag: string }[]
   > {
-    const stored = await this.fxModel.find().lean();
-    const rateMap: Record<string, number> = {};
-    for (const r of stored) rateMap[r.currency] = r.rate;
+    // Cache for 4 hours — same window as the refresh cron.
+    // Key: labi:fx:rates (shared across all callers)
+    return this.cache.wrap("labi:fx:rates", 4 * 3600, async () => {
+      const stored = await this.fxModel.find().lean();
+      const rateMap: Record<string, number> = {};
+      for (const r of stored) rateMap[r.currency] = r.rate;
 
-    return SUPPORTED_CURRENCIES.map((code) => ({
-      currency: code,
-      rate: rateMap[code] ?? FALLBACK_RATES[code] ?? 1,
-      symbol: this.symbolFor(code),
-      flag: this.flagFor(code),
-    }));
+      return SUPPORTED_CURRENCIES.map((code) => ({
+        currency: code,
+        rate: rateMap[code] ?? FALLBACK_RATES[code] ?? 1,
+        symbol: this.symbolFor(code),
+        flag: this.flagFor(code),
+      }));
+    });
   }
 
   /** Scheduled every 4 hours — refreshes rates from exchangerate.host */
@@ -150,6 +167,9 @@ export class GeoCurrencyService {
 
       await this.fxModel.bulkWrite(ops);
       this.logger.log(`FX rates refreshed — ${ops.length} currencies`);
+      // Bust the cached rates so the next getRates() call reads fresh data
+      await this.cache.del("labi:fx:rates");
+      await this.cache.delByPattern("labi:geo:*");
     } catch (err) {
       this.logger.error(
         `FX refresh failed, keeping existing rates: ${(err as Error).message}`,

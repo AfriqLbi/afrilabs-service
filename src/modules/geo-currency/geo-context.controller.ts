@@ -4,6 +4,7 @@ import { Request } from "express";
 import { GeoCurrencyService } from "./geo-currency.service";
 import { GeoContextDto } from "./dto/geo-context.dto";
 import { ApiEnvelopeOk } from "../../common/swagger/api-response.decorator";
+import { CacheControl } from "../../common/interceptors/cache-control.interceptor";
 
 /**
  * Separate controller at /v1/geo so that the existing /v1/fx/* routes on
@@ -28,6 +29,11 @@ export class GeoContextController {
    * Raw IPs are never stored; only the country code is used.
    */
   @Get("context")
+  // IP-specific: each IP may get a different country/currency, so we can't use
+  // a shared public cache.  private + short max-age lets the browser cache it
+  // for the session while the CDN won't store it.  The frontend TanStack Query
+  // layer handles the 4-hour re-use window.
+  @CacheControl("private, max-age=14400, stale-while-revalidate=300")
   @ApiOperation({
     summary: "Geo context + FX rates in one call",
     description:

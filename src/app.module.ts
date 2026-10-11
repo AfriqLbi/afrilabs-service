@@ -29,6 +29,7 @@ import { LookbookModule } from "./modules/lookbook/lookbook.module";
 // ── Multi-currency ────────────────────────────────────────────────────────────
 import { CurrencyConfigModule } from "./modules/currency-config/currency-config.module";
 import { ShippingModule } from "./modules/shipping/shipping.module";
+import { RedisCacheModule } from "./modules/redis-cache/redis-cache.module";
 
 @Module({
   imports: [
@@ -130,6 +131,8 @@ import { ShippingModule } from "./modules/shipping/shipping.module";
     CurrencyConfigModule,
     // ── Shipping ──────────────────────────────────────────────────────────────
     ShippingModule,
+    // ── Redis cache (global) ──────────────────────────────────────────────────
+    RedisCacheModule,
   ],
 })
 export class AppModule {}

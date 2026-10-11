@@ -1,4 +1,4 @@
-import { NestFactory } from "@nestjs/core";
+import { NestFactory, Reflector } from "@nestjs/core";
 import { ValidationPipe, VersioningType } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
@@ -13,6 +13,7 @@ import cookieParser from "cookie-parser";
 import { AppModule } from "./app.module";
 import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
 import { TransformInterceptor } from "./common/interceptors/transform.interceptor";
+import { CacheControlInterceptor } from "./common/interceptors/cache-control.interceptor";
 
 async function bootstrap() {
   /**
@@ -110,7 +111,10 @@ async function bootstrap() {
   );
 
   // ── Response envelope ─────────────────────────────────────────────────────────
-  app.useGlobalInterceptors(new TransformInterceptor());
+  app.useGlobalInterceptors(
+    new CacheControlInterceptor(app.get(Reflector)),
+    new TransformInterceptor(),
+  );
 
   // ── Exception filter ──────────────────────────────────────────────────────────
   app.useGlobalFilters(new HttpExceptionFilter());

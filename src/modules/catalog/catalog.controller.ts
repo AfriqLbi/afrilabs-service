@@ -42,6 +42,7 @@ import {
   BrandDto,
   CategoryDto,
 } from "../../common/swagger/swagger-response.dto";
+import { CacheControl } from "../../common/interceptors/cache-control.interceptor";
 
 // ─── Storefront (public) ──────────────────────────────────────────────────────
 
@@ -51,6 +52,7 @@ export class CatalogController {
   constructor(private readonly catalogService: CatalogService) {}
 
   @Get("products")
+  @CacheControl("public, max-age=120, stale-while-revalidate=300")
   @ApiOperation({
     summary: "List products with filters",
     description:
@@ -66,6 +68,7 @@ export class CatalogController {
   }
 
   @Get("products/:slug")
+  @CacheControl("public, max-age=300, stale-while-revalidate=600")
   @ApiOperation({
     summary: "Get product by slug",
     description:
@@ -73,7 +76,10 @@ export class CatalogController {
   })
   @ApiParam({ name: "slug", example: "hisense-55-4k-uhd-smart-tv-a6k" })
   @ApiEnvelopeOk(ProductResponseDto)
-  @ApiNotFoundResponse({ description: "Product not found", type: ApiErrorResponse })
+  @ApiNotFoundResponse({
+    description: "Product not found",
+    type: ApiErrorResponse,
+  })
   async getProduct(@Param("slug") slug: string) {
     const product = await this.catalogService.findProductBySlug(slug);
     const similar = await this.catalogService.getSimilarProducts(
@@ -86,9 +92,11 @@ export class CatalogController {
   }
 
   @Get("categories")
+  @CacheControl("public, max-age=600, stale-while-revalidate=3600")
   @ApiOperation({
     summary: "List all top-level categories with subcategories",
-    description: "Returns the full category tree. Used by the mega-menu and shop-by-category grid.",
+    description:
+      "Returns the full category tree. Used by the mega-menu and shop-by-category grid.",
   })
   @ApiEnvelopeOk(CategoryDto, true)
   listCategories() {
@@ -96,15 +104,20 @@ export class CatalogController {
   }
 
   @Get("categories/:slug")
+  @CacheControl("public, max-age=600, stale-while-revalidate=3600")
   @ApiOperation({ summary: "Get category by slug" })
   @ApiParam({ name: "slug", example: "tvs" })
   @ApiEnvelopeOk(CategoryDto)
-  @ApiNotFoundResponse({ description: "Category not found", type: ApiErrorResponse })
+  @ApiNotFoundResponse({
+    description: "Category not found",
+    type: ApiErrorResponse,
+  })
   getCategory(@Param("slug") slug: string) {
     return this.catalogService.findCategoryBySlug(slug);
   }
 
   @Get("brands")
+  @CacheControl("public, max-age=600, stale-while-revalidate=3600")
   @ApiOperation({
     summary: "List all brands",
     description:
@@ -123,7 +136,10 @@ export class CatalogController {
 @Controller({ path: "admin/catalog", version: "1" })
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles("super_admin", "merchandiser")
-@ApiForbiddenResponse({ description: "Insufficient role", type: ApiErrorResponse })
+@ApiForbiddenResponse({
+  description: "Insufficient role",
+  type: ApiErrorResponse,
+})
 export class AdminCatalogController {
   constructor(private readonly catalogService: CatalogService) {}
 
@@ -151,9 +167,18 @@ export class AdminCatalogController {
       "Creates a product with status `draft` by default. Upload images to Cloudinary first via `GET /v1/admin/media/sign`, then pass the returned URLs here.",
   })
   @ApiEnvelopeCreated(ProductResponseDto)
-  @ApiConflictResponse({ description: "SKU already exists", type: ApiErrorResponse })
-  @ApiBadRequestResponse({ description: "Validation error", type: ApiErrorResponse })
-  async createProduct(@Body() dto: CreateProductDto, @CurrentUser() user: JwtPayload) {
+  @ApiConflictResponse({
+    description: "SKU already exists",
+    type: ApiErrorResponse,
+  })
+  @ApiBadRequestResponse({
+    description: "Validation error",
+    type: ApiErrorResponse,
+  })
+  async createProduct(
+    @Body() dto: CreateProductDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
     const product = await this.catalogService.createProduct(dto, user.sub);
     return this.catalogService.toProductResponse(product);
   }
@@ -162,7 +187,10 @@ export class AdminCatalogController {
   @ApiOperation({ summary: "[Admin] Update a product" })
   @ApiParam({ name: "id", description: "Product ObjectId" })
   @ApiEnvelopeOk(ProductResponseDto)
-  @ApiNotFoundResponse({ description: "Product not found", type: ApiErrorResponse })
+  @ApiNotFoundResponse({
+    description: "Product not found",
+    type: ApiErrorResponse,
+  })
   async updateProduct(
     @Param("id") id: string,
     @Body() dto: UpdateProductDto,
@@ -180,7 +208,10 @@ export class AdminCatalogController {
   })
   @ApiParam({ name: "id", description: "Product ObjectId" })
   @ApiEnvelopeOk(Object)
-  @ApiNotFoundResponse({ description: "Product not found", type: ApiErrorResponse })
+  @ApiNotFoundResponse({
+    description: "Product not found",
+    type: ApiErrorResponse,
+  })
   async deleteProduct(@Param("id") id: string) {
     await this.catalogService.deleteProduct(id);
     return { message: "Product archived" };
@@ -193,7 +224,10 @@ export class AdminCatalogController {
       "Toggles one of `new_arrival | best_seller | featured | deal` on a product. Idempotent — calling it twice returns to the original state.",
   })
   @ApiParam({ name: "id", description: "Product ObjectId" })
-  @ApiParam({ name: "tag", enum: ["new_arrival", "best_seller", "featured", "deal"] })
+  @ApiParam({
+    name: "tag",
+    enum: ["new_arrival", "best_seller", "featured", "deal"],
+  })
   @ApiEnvelopeOk(ProductResponseDto)
   async toggleTag(
     @Param("id") id: string,
@@ -216,7 +250,10 @@ export class AdminCatalogController {
   @Post("brands")
   @ApiOperation({ summary: "[Admin] Create a brand" })
   @ApiEnvelopeCreated(BrandDto)
-  @ApiConflictResponse({ description: "Brand slug already exists", type: ApiErrorResponse })
+  @ApiConflictResponse({
+    description: "Brand slug already exists",
+    type: ApiErrorResponse,
+  })
   createBrand(@Body() dto: CreateBrandDto) {
     return this.catalogService.createBrand(dto);
   }
@@ -250,7 +287,10 @@ export class AdminCatalogController {
   @Post("categories")
   @ApiOperation({ summary: "[Admin] Create a category" })
   @ApiEnvelopeCreated(CategoryDto)
-  @ApiConflictResponse({ description: "Category slug already exists", type: ApiErrorResponse })
+  @ApiConflictResponse({
+    description: "Category slug already exists",
+    type: ApiErrorResponse,
+  })
   createCategory(@Body() dto: CreateCategoryDto) {
     return this.catalogService.createCategory(dto);
   }
@@ -259,7 +299,10 @@ export class AdminCatalogController {
   @ApiOperation({ summary: "[Admin] Update a category" })
   @ApiParam({ name: "id", description: "Category ObjectId" })
   @ApiEnvelopeOk(CategoryDto)
-  updateCategory(@Param("id") id: string, @Body() dto: Partial<CreateCategoryDto>) {
+  updateCategory(
+    @Param("id") id: string,
+    @Body() dto: Partial<CreateCategoryDto>,
+  ) {
     return this.catalogService.updateCategory(id, dto);
   }
 

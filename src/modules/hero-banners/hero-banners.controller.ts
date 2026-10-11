@@ -28,6 +28,7 @@ import {
   ApiEnvelopeCreated,
   ApiErrorResponse,
 } from "../../common/swagger/api-response.decorator";
+import { CacheControl } from "../../common/interceptors/cache-control.interceptor";
 
 // ─── Storefront (public) ──────────────────────────────────────────────────────
 
@@ -37,6 +38,7 @@ export class HeroBannersController {
   constructor(private readonly service: HeroBannersService) {}
 
   @Get()
+  @CacheControl("public, max-age=300, stale-while-revalidate=3600")
   @ApiOperation({
     summary: "List active hero banners",
     description:

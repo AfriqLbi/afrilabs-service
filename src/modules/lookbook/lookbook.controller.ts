@@ -1,10 +1,26 @@
 import {
-  Body, Controller, Delete, Get, HttpCode,
-  HttpStatus, Param, Patch, Post, UseGuards,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
 } from "@nestjs/common";
-import { ApiBearerAuth, ApiForbiddenResponse, ApiOperation, ApiTags } from "@nestjs/swagger";
+import {
+  ApiBearerAuth,
+  ApiForbiddenResponse,
+  ApiOperation,
+  ApiTags,
+} from "@nestjs/swagger";
 import { LookbookService } from "./lookbook.service";
-import { CreateLookbookItemDto, UpdateLookbookItemDto } from "./dto/lookbook.dto";
+import {
+  CreateLookbookItemDto,
+  UpdateLookbookItemDto,
+} from "./dto/lookbook.dto";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { Roles } from "../../common/decorators/roles.decorator";
@@ -12,6 +28,7 @@ import { ApiErrorResponse } from "../../common/swagger/api-response.decorator";
 import { IsArray, IsNumber, IsString, ValidateNested } from "class-validator";
 import { Type } from "class-transformer";
 import { ApiProperty } from "@nestjs/swagger";
+import { CacheControl } from "../../common/interceptors/cache-control.interceptor";
 
 // ── Storefront (public) ────────────────────────────────────────────────────────
 
@@ -21,6 +38,7 @@ export class LookbookController {
   constructor(private readonly svc: LookbookService) {}
 
   @Get()
+  @CacheControl("public, max-age=300, stale-while-revalidate=3600")
   @ApiOperation({ summary: "List published lookbook items" })
   list() {
     return this.svc.listPublished();
@@ -49,7 +67,10 @@ class ReorderDto {
 @Controller({ path: "admin/lookbook", version: "1" })
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles("super_admin", "merchandiser")
-@ApiForbiddenResponse({ description: "Insufficient role", type: ApiErrorResponse })
+@ApiForbiddenResponse({
+  description: "Insufficient role",
+  type: ApiErrorResponse,
+})
 export class AdminLookbookController {
   constructor(private readonly svc: LookbookService) {}
 
