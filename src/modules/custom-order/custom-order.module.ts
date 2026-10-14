@@ -9,6 +9,7 @@ import {
 } from "./custom-order.controller";
 import { MeasurementProfileModule } from "../measurement-profile/measurement-profile.module";
 import { NotificationsModule } from "../notifications/notifications.module";
+import { ProductionTrackingModule } from "../production-tracking/production-tracking.module";
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { NotificationsModule } from "../notifications/notifications.module";
     ]),
     MeasurementProfileModule,
     NotificationsModule,
+    ProductionTrackingModule,
   ],
   providers: [CustomOrderService],
   controllers: [

@@ -23,6 +23,7 @@ import {
 } from "./dto/custom-order.dto";
 import { MeasurementProfileService } from "../measurement-profile/measurement-profile.service";
 import { NotificationsService } from "../notifications/notifications.service";
+import { ProductionTrackingService } from "../production-tracking/production-tracking.service";
 import { paginate, PaginatedResult } from "../../common/dto/pagination.dto";
 
 @Injectable()
@@ -34,6 +35,7 @@ export class CustomOrderService {
     private readonly customOrderModel: Model<CustomOrderDocument>,
     private readonly measurementService: MeasurementProfileService,
     private readonly notifications: NotificationsService,
+    private readonly productionTracking: ProductionTrackingService,
     private readonly config: ConfigService,
   ) {}
 
@@ -391,6 +393,36 @@ export class CustomOrderService {
     }
     order.status = "in_production";
     return order.save();
+  }
+
+  /** Admin/staff: update the internal production stage of an in-production custom order. */
+  async updateProductionStage(
+    customOrderId: string,
+    stage: "cutting" | "sewing" | "quality_check" | "ready" | "delivered",
+    actorId: string,
+    actorEmail: string,
+    note?: string,
+  ): Promise<CustomOrderDocument> {
+    const order = await this.findByIdOrThrow(customOrderId);
+    if (order.status !== "in_production") {
+      throw new BadRequestException(
+        `Cannot update production stage — order status is "${order.status}". ` +
+          `Only in_production custom orders have production stages.`,
+      );
+    }
+
+    await this.productionTracking.updateStage(
+      {
+        orderId: customOrderId,
+        orderType: "custom_order",
+        orderReference: order.referenceNumber,
+        updatedBy: actorId,
+        updatedByName: actorEmail,
+      },
+      { stage, note },
+    );
+
+    return order;
   }
 
   /** Admin: mark completed. */

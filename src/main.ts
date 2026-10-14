@@ -87,17 +87,30 @@ async function bootstrap() {
   );
 
   // ── CORS ─────────────────────────────────────────────────────────────────────
+  const allowedOrigins =
+    nodeEnv === "production"
+      ? [
+          clientOrigin,
+          storefrontUrl,
+          "https://labiafrica.com",
+          "https://www.labiafrica.com",
+        ]
+      : [clientOrigin, storefrontUrl, /localhost:\d+/];
+
   app.enableCors({
-    origin:
-      nodeEnv === "production"
-        ? [
-            clientOrigin,
-            storefrontUrl,
-            "https://labiafrica.com",
-            "https://www.labiafrica.com",
-          ]
-        : [clientOrigin, storefrontUrl, /localhost:\d+/],
+    origin: allowedOrigins,
     credentials: true,
+    methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "Accept",
+      "X-Guest-Id",
+      "X-Geo-Country",
+    ],
+    exposedHeaders: ["Set-Cookie"],
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
   });
 
   // ── Validation ───────────────────────────────────────────────────────────────

@@ -96,7 +96,9 @@ export class CustomOrderController {
   @Get(":id")
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Get a single custom order (must belong to current user)" })
+  @ApiOperation({
+    summary: "Get a single custom order (must belong to current user)",
+  })
   @ApiParam({ name: "id", description: "Custom order MongoDB ObjectId" })
   @ApiEnvelopeOk(CustomOrderResponseDto)
   async findOne(@CurrentUser() user: JwtPayload, @Param("id") id: string) {
@@ -204,6 +206,39 @@ export class AdminCustomOrderController {
     return this.service.adminMarkCompleted(id);
   }
 
+  /**
+   * Update the internal production stage of an in-production custom order.
+   * Mirrors PATCH /admin/orders/:id/production-stage for catalog orders.
+   */
+  @Patch(":id/production-stage")
+  @Roles("super_admin", "merchandiser", "staff")
+  @ApiOperation({
+    summary:
+      "Admin/Staff: update production stage of an in-production custom order",
+    description:
+      "Valid stages: cutting → sewing → quality_check → ready → delivered. " +
+      "Order must be in_production status.",
+  })
+  @ApiParam({ name: "id", description: "Custom order MongoDB ObjectId" })
+  @ApiEnvelopeOk(CustomOrderResponseDto)
+  async updateProductionStage(
+    @Param("id") id: string,
+    @Body()
+    dto: {
+      stage: "cutting" | "sewing" | "quality_check" | "ready" | "delivered";
+      note?: string;
+    },
+    @CurrentUser() actor: JwtPayload,
+  ) {
+    return this.service.updateProductionStage(
+      id,
+      dto.stage,
+      actor.sub,
+      actor.email,
+      dto.note,
+    );
+  }
+
   /** Cancel or refund a custom order. */
   @Patch(":id/status")
   @Roles("super_admin") // only super_admin can cancel/refund
@@ -243,11 +278,15 @@ export class StaffCustomOrderController {
   @ApiPaginatedOk(CustomOrderResponseDto)
   async findProductionQueue(@Query() query: CustomOrderQueryDto) {
     // Override query status to only return production-relevant entries
-    const scopedQuery: CustomOrderQueryDto = Object.assign(new CustomOrderQueryDto(), query, {
-      status: ["in_production", "completed"].includes(query.status ?? "")
-        ? query.status
-        : "in_production",
-    });
+    const scopedQuery: CustomOrderQueryDto = Object.assign(
+      new CustomOrderQueryDto(),
+      query,
+      {
+        status: ["in_production", "completed"].includes(query.status ?? "")
+          ? query.status
+          : "in_production",
+      },
+    );
     return this.service.adminFindAll(scopedQuery);
   }
 

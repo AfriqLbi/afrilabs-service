@@ -119,6 +119,36 @@ export class AuthService {
       .lean();
   }
 
+  /** Update customer profile (name, phone). Email is read-only. */
+  async updateProfile(
+    userId: string,
+    dto: { name?: string; phone?: string },
+  ): Promise<{
+    id: string;
+    name: string;
+    email: string;
+    phone: string | null;
+    role: string;
+  }> {
+    const update: Record<string, string | null> = {};
+    if (dto.name?.trim()) update.name = dto.name.trim();
+    if (dto.phone !== undefined) update.phone = dto.phone?.trim() || null;
+
+    const updated = await this.userModel
+      .findByIdAndUpdate(userId, { $set: update }, { new: true })
+      .lean();
+
+    if (!updated) throw new BadRequestException("User not found");
+
+    return {
+      id: userId,
+      name: updated.name,
+      email: updated.email,
+      phone: updated.phone,
+      role: updated.role,
+    };
+  }
+
   // ─── Helpers ─────────────────────────────────────────────────────────────────
 
   private async issueTokenPair(user: UserDocument) {

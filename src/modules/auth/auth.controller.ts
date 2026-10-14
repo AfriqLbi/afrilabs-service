@@ -18,6 +18,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Patch,
   Post,
   Req,
   Res,
@@ -203,9 +204,22 @@ export class AuthController {
   me(@CurrentUser() user: JwtPayload) {
     return this.authService.profile(user.sub);
   }
-}
 
-// ── Admin auth ─────────────────────────────────────────────────────────────────
+  @UseGuards(JwtAuthGuard)
+  @Patch("profile")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: "Update customer profile (name, phone)",
+    description: "Email is immutable. Returns the updated user object.",
+  })
+  @ApiEnvelopeOk(AuthUserDto)
+  updateProfile(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: { name?: string; phone?: string },
+  ) {
+    return this.authService.updateProfile(user.sub, dto);
+  }
+}
 
 @ApiTags("Auth — Admin")
 @Controller({ path: "admin/auth", version: "1" })
