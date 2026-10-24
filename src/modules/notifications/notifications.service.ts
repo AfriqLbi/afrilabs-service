@@ -64,30 +64,108 @@ function fmtOrderTotal(order: OrderDocument): string {
 
 const LOGO_URL = "https://labiafrica.com/icon-512.png";
 
-/** Full email shell: dark background, gold wordmark with inline logo image. */
+/**
+ * Full email shell: dark background, gold wordmark with inline logo image.
+ *
+ * Dark-mode handling strategy (each client behaves differently):
+ *  - `<meta name="color-scheme" content="only dark">` tells clients the
+ *    email is intentionally dark; do NOT auto-invert it.
+ *  - `[data-ogsc]` CSS rules re-assert our exact colours for Outlook's
+ *    dark mode (it injects data-ogsc on <html> when it switches).
+ *  - `-webkit-text-fill-color` on gold elements overrides Apple Mail's
+ *    forced colour rewrite (this property beats `color` in WebKit).
+ *  - `mso-color-alt` is an MSO/Outlook inline fallback for gold text.
+ *  - `@media (prefers-color-scheme: dark)` re-pins colours for Gmail iOS
+ *    and other CSS-aware dark-mode renderers.
+ */
 function labiShell(content: string, storefrontUrl: string): string {
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" xmlns:v="urn:schemas-microsoft-com:vml"
+                xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <!--[if !mso]><!-->
+  <meta name="color-scheme" content="only dark" />
+  <meta name="supported-color-schemes" content="only dark" />
+  <!--<![endif]-->
   <title>LABI</title>
+  <style>
+    :root { color-scheme: only dark; supported-color-schemes: only dark; }
+
+    /* Outlook dark mode — re-assert every colour we care about */
+    [data-ogsc] .labi-bg-outer   { background-color: #0a0a0a !important; }
+    [data-ogsc] .labi-bg-card    { background-color: #111111 !important; }
+    [data-ogsc] .labi-bg-box     { background-color: #191919 !important; }
+    [data-ogsc] .labi-text-body  { color: #e8e8e8 !important; }
+    [data-ogsc] .labi-text-muted { color: #888888 !important; }
+    [data-ogsc] .labi-text-dim   { color: #555555 !important; }
+    [data-ogsc] .labi-gold {
+      color: #FED700 !important;
+      -webkit-text-fill-color: #FED700 !important;
+    }
+    [data-ogsc] .labi-btn-gold {
+      background-color: #FED700 !important;
+      color: #000000 !important;
+      -webkit-text-fill-color: #000000 !important;
+    }
+    [data-ogsc] .labi-btn-outline {
+      border-color: #FED700 !important;
+      color: #FED700 !important;
+      -webkit-text-fill-color: #FED700 !important;
+    }
+
+    /* Apple Mail / Gmail iOS dark mode */
+    @media (prefers-color-scheme: dark) {
+      .labi-bg-outer   { background-color: #0a0a0a !important; }
+      .labi-bg-card    { background-color: #111111 !important; }
+      .labi-bg-box     { background-color: #191919 !important; }
+      .labi-text-body  { color: #e8e8e8 !important; }
+      .labi-text-muted { color: #888888 !important; }
+      .labi-text-dim   { color: #555555 !important; }
+      .labi-gold {
+        color: #FED700 !important;
+        -webkit-text-fill-color: #FED700 !important;
+      }
+      .labi-btn-gold {
+        background-color: #FED700 !important;
+        color: #000000 !important;
+        -webkit-text-fill-color: #000000 !important;
+      }
+      .labi-btn-outline {
+        border-color: #FED700 !important;
+        color: #FED700 !important;
+        -webkit-text-fill-color: #FED700 !important;
+      }
+    }
+  </style>
 </head>
-<body style="margin:0;padding:0;background:#0a0a0a;font-family:'DM Sans',Arial,sans-serif;color:#e8e8e8;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;">
+<body class="labi-bg-outer"
+      style="margin:0;padding:0;background-color:#0a0a0a;
+             font-family:'DM Sans',Arial,sans-serif;color:#e8e8e8;"
+      data-ogsb="#0a0a0a">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+         class="labi-bg-outer" style="background-color:#0a0a0a;">
     <tr>
       <td align="center" style="padding:32px 16px;">
         <table role="presentation" width="600" cellpadding="0" cellspacing="0"
-               style="max-width:600px;width:100%;background:#111111;border:1px solid #222;">
+               class="labi-bg-card"
+               style="max-width:600px;width:100%;background-color:#111111;border:1px solid #222222;">
 
           <!-- Header -->
           <tr>
-            <td style="padding:32px 40px 24px;border-bottom:1px solid #222;text-align:center;">
+            <td class="labi-bg-card"
+                style="padding:32px 40px 24px;border-bottom:1px solid #222222;
+                       text-align:center;background-color:#111111;">
               <a href="${storefrontUrl}" style="text-decoration:none;">
                 <img src="${LOGO_URL}" alt="LABI" width="52" height="52"
                      style="display:block;margin:0 auto 12px;border-radius:4px;" />
-                <span style="display:block;font-size:24px;font-weight:800;letter-spacing:0.35em;
-                             color:#FED700;font-family:'DM Sans',Arial,sans-serif;">
+                <span class="labi-gold"
+                      style="display:block;font-size:24px;font-weight:800;
+                             letter-spacing:0.35em;color:#FED700;
+                             -webkit-text-fill-color:#FED700;
+                             mso-color-alt:#FED700;
+                             font-family:'DM Sans',Arial,sans-serif;">
                   LABI
                 </span>
               </a>
@@ -96,21 +174,29 @@ function labiShell(content: string, storefrontUrl: string): string {
 
           <!-- Body -->
           <tr>
-            <td style="padding:36px 40px;">
+            <td class="labi-bg-card"
+                style="padding:36px 40px;background-color:#111111;">
               ${content}
             </td>
           </tr>
 
           <!-- Footer -->
           <tr>
-            <td style="padding:24px 40px;border-top:1px solid #222;text-align:center;">
-              <p style="margin:0 0 6px;font-size:11px;color:#555;letter-spacing:0.1em;
-                        text-transform:uppercase;">
+            <td class="labi-bg-card"
+                style="padding:24px 40px;border-top:1px solid #222222;
+                       text-align:center;background-color:#111111;">
+              <p class="labi-text-dim"
+                 style="margin:0 0 6px;font-size:11px;color:#555555;
+                        letter-spacing:0.1em;text-transform:uppercase;">
                 Labi Africa &mdash; Lagos &bull; Ilorin, Nigeria
               </p>
-              <p style="margin:0;font-size:11px;color:#555;">
+              <p class="labi-text-dim"
+                 style="margin:0;font-size:11px;color:#555555;">
                 Questions? Reply to this email or
-                <a href="https://wa.me/2349019825348" style="color:#FED700;text-decoration:none;">
+                <a href="https://wa.me/2349019825348"
+                   class="labi-gold"
+                   style="color:#FED700;-webkit-text-fill-color:#FED700;
+                          text-decoration:none;">
                   chat on WhatsApp
                 </a>
               </p>
@@ -134,9 +220,12 @@ function goldBtn(href: string, label: string): string {
     <tr>
       <td>
         <a href="${href}"
-           style="display:inline-block;background:#FED700;color:#000000;padding:14px 32px;
-                  text-decoration:none;font-size:11px;letter-spacing:0.2em;
-                  text-transform:uppercase;font-weight:700;font-family:'DM Sans',Arial,sans-serif;">
+           class="labi-btn-gold"
+           style="display:inline-block;background-color:#FED700;color:#000000;
+                  -webkit-text-fill-color:#000000;mso-color-alt:#000000;
+                  padding:14px 32px;text-decoration:none;font-size:11px;
+                  letter-spacing:0.2em;text-transform:uppercase;font-weight:700;
+                  font-family:'DM Sans',Arial,sans-serif;">
           ${label}
         </a>
       </td>
@@ -150,10 +239,12 @@ function outlineBtn(href: string, label: string): string {
     <tr>
       <td>
         <a href="${href}"
+           class="labi-btn-outline"
            style="display:inline-block;background:transparent;color:#FED700;
-                  border:1px solid #FED700;padding:14px 32px;
-                  text-decoration:none;font-size:11px;letter-spacing:0.2em;
-                  text-transform:uppercase;font-weight:700;font-family:'DM Sans',Arial,sans-serif;">
+                  -webkit-text-fill-color:#FED700;mso-color-alt:#FED700;
+                  border:1px solid #FED700;padding:14px 32px;text-decoration:none;
+                  font-size:11px;letter-spacing:0.2em;text-transform:uppercase;
+                  font-weight:700;font-family:'DM Sans',Arial,sans-serif;">
           ${label}
         </a>
       </td>
@@ -164,16 +255,21 @@ function outlineBtn(href: string, label: string): string {
 /** Styled info box. */
 function infoBox(rows: string, borderColor = "#2a2a2a"): string {
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"
-           style="background:#191919;border:1px solid ${borderColor};margin:20px 0;">
+           class="labi-bg-box"
+           style="background-color:#191919;border:1px solid ${borderColor};margin:20px 0;">
     <tr><td style="padding:20px 24px;">${rows}</td></tr>
   </table>`;
 }
 
 /** A single row inside an info box. */
 function infoRow(label: string, value: string, highlight = false): string {
+  const valueStyle = highlight
+    ? `color:#FED700;-webkit-text-fill-color:#FED700;mso-color-alt:#FED700;`
+    : `color:#e8e8e8;`;
+  const valueClass = highlight ? `class="labi-gold"` : `class="labi-text-body"`;
   return `<p style="margin:0 0 10px;font-size:13px;color:#999;font-family:'DM Sans',Arial,sans-serif;">
     <span style="display:inline-block;min-width:140px;color:#666;">${label}</span>
-    <strong style="color:${highlight ? "#FED700" : "#e8e8e8"};">${value}</strong>
+    <strong ${valueClass} style="${valueStyle}">${value}</strong>
   </p>`;
 }
 
@@ -648,29 +744,34 @@ export class NotificationsService {
     const orderUrl = `${this.storefrontUrl}/orders/${(order._id as unknown as { toString(): string }).toString()}`;
     const quote = order.shippingQuote;
     const currency = order.chargeCurrency ?? "NGN";
-
-    // Items subtotal = order total minus shipping fee (both in naira)
-    const itemsNaira = Math.max(
-      0,
-      (order.total ?? 0) - (order.shippingFee ?? 0),
-    );
-
-    // For multi-currency orders, show the charge currency amounts
     const isMulti = currency !== "NGN" && order.chargeTotal != null;
+
+    // ── Fee display ──────────────────────────────────────────────────────────
+    // order.shippingFee is stored as back-converted NGN naira — NOT in
+    // chargeCurrency minor units.  The authoritative chargeCurrency figure is
+    // order.shippingQuote.amount (what the admin typed, in minor units).
     const feeDisplay = isMulti
       ? new Intl.NumberFormat("en-US", {
           style: "currency",
           currency,
           minimumFractionDigits: 2,
-        }).format((order.shippingFee ?? 0) / 100)
+        }).format((quote?.amount ?? 0) / 100)
       : fmtNGN(order.shippingFee ?? 0);
+
+    // ── Items subtotal display ───────────────────────────────────────────────
+    // Multi-currency: chargeTotal already includes the shipping amount; subtract
+    // it back to get the items-only figure.  Both are in chargeCurrency minor units.
+    // NGN: order.total is naira, shippingFee is naira.
     const itemsDisplay = isMulti
       ? new Intl.NumberFormat("en-US", {
           style: "currency",
           currency,
           minimumFractionDigits: 2,
-        }).format(itemsNaira / 100)
-      : fmtNGN(itemsNaira);
+        }).format(
+          Math.max(0, (order.chargeTotal ?? 0) - (quote?.amount ?? 0)) / 100,
+        )
+      : fmtNGN(Math.max(0, (order.total ?? 0) - (order.shippingFee ?? 0)));
+
     const totalDisplay = fmtOrderTotal(order);
 
     const validUntilDisplay = quote?.validUntil
@@ -679,13 +780,42 @@ export class NotificationsService {
         })
       : "—";
 
+    // Build order item rows to show the customer what they ordered
+    const itemRows = order.items
+      .map(
+        (i) =>
+          `<tr>
+            <td style="padding:10px 0;border-bottom:1px solid #222;font-size:13px;color:#ccc;">
+              ${i.title}
+              <span style="display:block;font-size:11px;color:#555;letter-spacing:0.08em;
+                           text-transform:uppercase;margin-top:2px;">
+                Qty ${i.qty}
+              </span>
+            </td>
+            <td style="padding:10px 0;border-bottom:1px solid #222;text-align:right;
+                       font-size:13px;color:#e8e8e8;white-space:nowrap;">
+              ${fmtNGN(i.unitPrice * i.qty)}
+            </td>
+          </tr>`,
+      )
+      .join("");
+
     const body = `
       ${heading("Your shipping quote is ready")}
       ${sub(`Hi ${order.customerName ?? "there"}, your order is ready for payment including the shipping fee.`)}
 
+      <p style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;
+                color:#555;margin:0 0 10px;font-family:'DM Sans',Arial,sans-serif;">
+        Items in this order
+      </p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+             style="margin-bottom:24px;">
+        <tbody>${itemRows}</tbody>
+      </table>
+
       ${infoBox(
         infoRow("Order", order.orderNumber) +
-          infoRow("Items", itemsDisplay) +
+          infoRow("Items subtotal", itemsDisplay) +
           infoRow("Shipping fee", feeDisplay, true) +
           (quote?.carrier ? infoRow("Carrier", quote.carrier) : "") +
           (quote?.etaDays
