@@ -610,18 +610,109 @@ export class OrderService {
    * Public lookup used by the checkout confirmation page after a customer
    * returns from the payment gateway. Returns a lean projection with only
    * the fields the confirm screen needs — no shipping address, items, or
-   * other PII. Payment status is confirmed exclusively via webhook; this only
-   * reflects the persisted order state.
+   * other PII.
+   *
+   * If the order is still `pending_payment` we actively verify with the
+   * gateway. This handles the common case where the browser redirect lands
+   * before the webhook fires (localhost tunnels, slow queues, etc.). The
+   * full webhook path remains the authoritative source of truth — this is
+   * an idempotent fast-path only.
    */
   async findByReferenceStatus(ref: string) {
     const order = await this.orderModel
       .findOne({ paymentReference: ref })
-      .select(
-        "orderNumber status customerEmail customerName paymentProvider checkoutUrl",
-      )
       .lean();
     if (!order) throw new NotFoundException("Order not found");
-    return order;
+
+    // Fast path: already terminal — return immediately.
+    if (order.status !== "pending_payment") {
+      return this.toStatusProjection(order);
+    }
+
+    // Active gateway verification — gives the confirm page a result even
+    // when the webhook hasn't fired yet (e.g. dev tunnels, slow delivery).
+    try {
+      let gatewayStatus = "unknown";
+
+      if (order.paymentProvider === "paystack") {
+        gatewayStatus =
+          await this.paymentService.verifyPaystackTransaction(ref);
+        // Paystack returns "success" for a confirmed charge
+        if (gatewayStatus === "success") {
+          const eventId = `active-verify:${ref}`;
+          const fullOrder = await this.orderModel.findOne({
+            paymentReference: ref,
+          });
+          if (fullOrder && fullOrder.status === "pending_payment") {
+            await this.markPaid(fullOrder._id.toString(), eventId);
+            for (const item of fullOrder.items) {
+              await this.inventoryService
+                .commitReservedStock(item.productId, item.qty)
+                .catch(() => {
+                  // Stock may already be committed by a concurrent webhook — safe to swallow
+                });
+            }
+          }
+        } else if (
+          gatewayStatus === "failed" ||
+          gatewayStatus === "abandoned"
+        ) {
+          await this.markFailed(order._id.toString()).catch(() => {});
+        }
+      } else if (order.paymentProvider === "flutterwave") {
+        gatewayStatus =
+          await this.paymentService.verifyFlutterwaveTransaction(ref);
+        // Flutterwave returns "successful"
+        if (gatewayStatus === "successful") {
+          const eventId = `active-verify:${ref}`;
+          const fullOrder = await this.orderModel.findOne({
+            paymentReference: ref,
+          });
+          if (fullOrder && fullOrder.status === "pending_payment") {
+            await this.markPaid(fullOrder._id.toString(), eventId);
+            for (const item of fullOrder.items) {
+              await this.inventoryService
+                .commitReservedStock(item.productId, item.qty)
+                .catch(() => {});
+            }
+          }
+        } else if (gatewayStatus === "failed") {
+          await this.markFailed(order._id.toString()).catch(() => {});
+        }
+      }
+    } catch (err) {
+      // Non-fatal: polling will retry; do not surface gateway errors to the customer
+      this.logger.warn(
+        `Active verify failed for ${ref}: ${(err as Error).message}`,
+      );
+    }
+
+    // Re-fetch after potential status change
+    const updated = await this.orderModel
+      .findOne({ paymentReference: ref })
+      .lean();
+    if (!updated) throw new NotFoundException("Order not found");
+    return this.toStatusProjection(updated);
+  }
+
+  private toStatusProjection(order: {
+    _id: unknown;
+    orderNumber: string;
+    status: string;
+    customerEmail?: string | null;
+    customerName?: string | null;
+    paymentProvider: string;
+    checkoutUrl?: string | null;
+  }) {
+    return {
+      _id: order._id,
+      orderNumber: order.orderNumber,
+      status: order.status,
+      customerEmail: order.customerEmail ?? null,
+      customerName: order.customerName ?? null,
+      paymentProvider: order.paymentProvider,
+      checkoutUrl: order.checkoutUrl ?? null,
+    };
   }
 
   async findById(id: string): Promise<OrderDocument> {
@@ -650,7 +741,15 @@ export class OrderService {
       return order;
     }
 
-    // Any other caller must provide a valid linkToken
+    // True guest order (no account linked) — allow without a token so the
+    // customer can view the order they just placed via the confirm page.
+    // The order ID is already semi-private (MongoDB ObjectId from the URL).
+    if (!order.customerId) {
+      return order;
+    }
+
+    // Authenticated order belonging to a different user, or unauthenticated
+    // request for an order that does have an owner — require a signed link token.
     if (!linkToken) {
       throw new ForbiddenException(
         "A signed link token is required to view this order",

@@ -392,6 +392,21 @@ export class PaymentService {
     return data.data?.status ?? "unknown";
   }
 
+  async verifyFlutterwaveTransaction(reference: string): Promise<string> {
+    const secretKey = this.config.get<string>("flutterwave.secretKey");
+    const res = await fetch(
+      `https://api.flutterwave.com/v3/transactions/verify_by_reference?tx_ref=${encodeURIComponent(reference)}`,
+      { headers: { Authorization: `Bearer ${secretKey}` } },
+    );
+    if (!res.ok) return "unknown";
+    const data = (await res.json()) as {
+      status: string;
+      data: { status: string };
+    };
+    // Flutterwave returns data.status = "success" and data.data.status = "successful"
+    return data.data?.status ?? "unknown";
+  }
+
   // ─── Refund (shipping adjustment — spec §8.4) ─────────────────────────────
 
   /**
