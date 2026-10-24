@@ -4,33 +4,33 @@ import { Document } from "mongoose";
 export type CategoryDocument = Category & Document;
 
 export class SubcategoryEmbedded {
-  @Prop({ required: true }) id: string;
-  @Prop({ required: true }) name: string;
-  @Prop({ required: true }) slug: string;
+  @Prop({ required: true }) id!: string;
+  @Prop({ required: true }) name!: string;
+  @Prop({ required: true }) slug!: string;
 }
 
 @Schema({ timestamps: true, collection: "categories" })
 export class Category {
   @Prop({ required: true, trim: true })
-  name: string;
+  name!: string;
 
   @Prop({ required: true, unique: true, lowercase: true, trim: true })
-  slug: string;
+  slug!: string;
 
   @Prop({ default: "" })
-  blurb: string;
+  blurb!: string;
 
   @Prop({ default: "" })
-  imageUrl: string;
+  imageUrl!: string;
 
   @Prop({ type: String, default: null })
-  parentId: string | null;
+  parentId!: string | null;
 
   @Prop({ type: [{ id: String, name: String, slug: String }], default: [] })
-  subcategories: SubcategoryEmbedded[];
+  subcategories!: SubcategoryEmbedded[];
 
   @Prop({ default: 0 })
-  sortOrder: number;
+  sortOrder!: number;
 
   /**
    * Distinguishes browseable product categories from admin-curated storefront
@@ -43,7 +43,7 @@ export class Category {
     enum: ["category", "section"],
     default: "category",
   })
-  type: "category" | "section";
+  type!: "category" | "section";
 }
 
 export const CategorySchema = SchemaFactory.createForClass(Category);

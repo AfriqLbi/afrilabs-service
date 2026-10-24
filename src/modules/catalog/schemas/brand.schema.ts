@@ -6,14 +6,14 @@ export type BrandDocument = Brand & Document;
 @Schema({ timestamps: true, collection: "brands" })
 export class Brand {
   @Prop({ required: true, trim: true })
-  name: string;
+  name!: string;
 
   @Prop({ required: true, unique: true, lowercase: true, trim: true })
-  slug: string;
+  slug!: string;
 
   /** Cloudinary URL */
   @Prop({ default: "" })
-  logoUrl: string;
+  logoUrl!: string;
 }
 
 export const BrandSchema = SchemaFactory.createForClass(Brand);

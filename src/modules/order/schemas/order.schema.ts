@@ -24,57 +24,57 @@ export type PaymentProvider = "paystack" | "flutterwave" | "stripe";
 export type OrderDocument = Order & Document;
 
 export class OrderLineEmbedded {
-  @Prop({ required: true }) productId: string;
-  @Prop({ required: true }) sku: string;
-  @Prop({ required: true }) title: string;
-  @Prop({ required: true }) image: string;
-  @Prop({ required: true, min: 1 }) qty: number;
-  @Prop({ required: true, min: 0 }) unitPrice: number;
+  @Prop({ required: true }) productId!: string;
+  @Prop({ required: true }) sku!: string;
+  @Prop({ required: true }) title!: string;
+  @Prop({ required: true }) image!: string;
+  @Prop({ required: true, min: 1 }) qty!: number;
+  @Prop({ required: true, min: 0 }) unitPrice!: number;
 }
 
 export class AddressEmbedded {
-  @Prop({ required: true }) fullName: string;
-  @Prop({ required: true }) phone: string;
-  @Prop({ required: true }) line1: string;
-  @Prop({ default: "" }) line2: string;
-  @Prop({ required: true }) city: string;
-  @Prop({ required: true }) state: string;
-  @Prop({ default: "Nigeria" }) country: string;
+  @Prop({ required: true }) fullName!: string;
+  @Prop({ required: true }) phone!: string;
+  @Prop({ required: true }) line1!: string;
+  @Prop({ default: "" }) line2!: string;
+  @Prop({ required: true }) city!: string;
+  @Prop({ required: true }) state!: string;
+  @Prop({ default: "Nigeria" }) country!: string;
 }
 
 @Schema({ timestamps: true, collection: "orders" })
 export class Order {
   @Prop({ required: true, unique: true })
-  orderNumber: string;
+  orderNumber!: string;
 
   /** null for guest checkout — explicit type required to avoid CannotDetermineTypeError */
   @Prop({ type: String, default: null, index: true })
-  customerId: string | null;
+  customerId!: string | null;
 
   @Prop({ type: String, default: null })
-  customerEmail: string | null;
+  customerEmail!: string | null;
 
   @Prop({ type: String, default: null })
-  customerName: string | null;
+  customerName!: string | null;
 
   @Prop({ type: [Object], default: [] })
-  items: OrderLineEmbedded[];
+  items!: OrderLineEmbedded[];
 
   @Prop({ required: true, min: 0 })
-  subtotal: number;
+  subtotal!: number;
 
   @Prop({ type: String, default: null })
-  promoCode: string | null;
+  promoCode!: string | null;
 
   @Prop({ default: 0 })
-  discountAmount: number;
+  discountAmount!: number;
 
   /**
    * Shipping fee in minor units of chargeCurrency.
    * 0 until calculated or quoted. Included in chargeTotal.
    */
   @Prop({ default: 0, min: 0 })
-  shippingFee: number;
+  shippingFee!: number;
 
   /**
    * How the shipping fee was determined.
@@ -84,6 +84,7 @@ export class Order {
     type: String,
     enum: [
       "rate_card",
+      "flat_fee",
       "admin_quote",
       "admin_override",
       "free_threshold",
@@ -92,19 +93,19 @@ export class Order {
     ],
     default: null,
   })
-  shippingFeeSource: string | null;
+  shippingFeeSource!: string | null;
 
   /** Snapshot of the matched zone name (for display without a join). */
   @Prop({ type: String, default: null })
-  shippingZoneName: string | null;
+  shippingZoneName!: string | null;
 
   /** Reference to the matched ShippingZone document. */
   @Prop({ type: Types.ObjectId, ref: "ShippingZone", default: null })
-  shippingZoneId: Types.ObjectId | null;
+  shippingZoneId!: Types.ObjectId | null;
 
   /** Chargeable weight used when the fee was calculated (grams). */
   @Prop({ type: Number, default: null })
-  chargeableWeightGrams: number | null;
+  chargeableWeightGrams!: number | null;
 
   @Prop({
     type: String,
@@ -119,11 +120,11 @@ export class Order {
     ],
     default: "NOT_CALCULATED",
   })
-  shippingStatus: ShippingStatus;
+  shippingStatus!: ShippingStatus;
 
   /** Embedded shipping quote — populated when zone mode is "quote". */
   @Prop({ type: Object, default: null })
-  shippingQuote: {
+  shippingQuote!: {
     requestedAt?: Date;
     quotedAt?: Date;
     quotedBy?: Types.ObjectId;
@@ -138,7 +139,7 @@ export class Order {
 
   /** Post-payment shipping adjustments (refund or extra charge). */
   @Prop({ type: [Object], default: [] })
-  shippingAdjustments: {
+  shippingAdjustments!: {
     type: "refund" | "extra_charge" | "override";
     amount: number;
     reason: string;
@@ -148,10 +149,10 @@ export class Order {
   }[];
 
   @Prop({ required: true, min: 0 })
-  total: number;
+  total!: number;
 
   @Prop({ default: "NGN" })
-  currency: string;
+  currency!: string;
 
   @Prop({
     type: String,
@@ -167,42 +168,42 @@ export class Order {
     ],
     default: "pending_payment",
   })
-  status: OrderStatus;
+  status!: OrderStatus;
 
   @Prop({
     type: String,
     enum: ["paystack", "flutterwave", "stripe"],
     required: true,
   })
-  paymentProvider: PaymentProvider;
+  paymentProvider!: PaymentProvider;
 
   @Prop({ required: true, index: true })
-  paymentReference: string;
+  paymentReference!: string;
 
   @Prop({ type: String, default: null })
-  checkoutUrl: string | null;
+  checkoutUrl!: string | null;
 
   @Prop({ type: Object, required: true })
-  shippingAddress: AddressEmbedded;
+  shippingAddress!: AddressEmbedded;
 
   @Prop({ type: Date, default: null })
-  paidAt: Date | null;
+  paidAt!: Date | null;
 
   @Prop({ type: Date, default: null })
-  fulfilledAt: Date | null;
+  fulfilledAt!: Date | null;
 
   @Prop({ type: String, default: null })
-  processedWebhookId: string | null;
+  processedWebhookId!: string | null;
 
   /**
    * Set when a webhook amount/currency does not match the order snapshot.
    * The order stays in `pending_payment` and admins are alerted (spec §7.3).
    */
   @Prop({ type: Boolean, default: false })
-  paymentFlagged: boolean;
+  paymentFlagged!: boolean;
 
   @Prop({ type: String, default: null })
-  paymentFlagReason: string | null;
+  paymentFlagReason!: string | null;
 
   // ── Multi-currency fields (Req 4 — added in multi-currency-geo feature) ─────
 
@@ -211,7 +212,7 @@ export class Order {
    * Source of truth for all accounting; all other currency amounts derive from this.
    */
   @Prop({ type: Number, default: null })
-  ngnTotal: number | null;
+  ngnTotal!: number | null;
 
   /**
    * Charge amount in the minor unit of chargeCurrency (e.g. cents for USD).
@@ -219,28 +220,28 @@ export class Order {
    * Webhook handlers MUST use this value — never recompute from current rates.
    */
   @Prop({ type: Number, default: null })
-  chargeTotal: number | null;
+  chargeTotal!: number | null;
 
   /**
    * Exchange rate locked at order creation: 1 NGN = fxRate units of chargeCurrency.
    * Always 1 for NGN orders.
    */
   @Prop({ type: Number, default: 1 })
-  fxRate: number;
+  fxRate!: number;
 
   /**
    * FX buffer percentage applied at order creation (e.g. 2 = 2%).
    * Always 0 for NGN orders.
    */
   @Prop({ type: Number, default: 0 })
-  fxBuffer: number;
+  fxBuffer!: number;
 
   /**
    * ISO 4217 currency in which the customer is billed.
    * Defaults to "NGN". Mirrors the existing `currency` field (kept for compat).
    */
   @Prop({ type: String, default: "NGN" })
-  chargeCurrency: string;
+  chargeCurrency!: string;
 
   /**
    * Timestamp when the price lock expires (order creation + 30 min).
@@ -248,14 +249,14 @@ export class Order {
    * when this timestamp is reached.
    */
   @Prop({ type: Date, default: null })
-  reservationExpiresAt: Date | null;
+  reservationExpiresAt!: Date | null;
 
   /**
    * BullMQ job ID for the per-order expiry job.
    * Stored so the job can be cancelled immediately when payment is confirmed.
    */
   @Prop({ type: String, default: null })
-  expiryJobId: string | null;
+  expiryJobId!: string | null;
 
   /**
    * Denormalized current production stage — mirrors the latest ProductionLog entry.
@@ -268,7 +269,7 @@ export class Order {
     enum: ["cutting", "sewing", "quality_check", "ready", "delivered", null],
     default: null,
   })
-  productionStage:
+  productionStage!:
     "cutting" | "sewing" | "quality_check" | "ready" | "delivered" | null;
 }
 

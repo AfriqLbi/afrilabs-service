@@ -14,23 +14,23 @@ export class WebhookEvent {
     required: true,
     enum: ["paystack", "flutterwave", "stripe"],
   })
-  provider: "paystack" | "flutterwave" | "stripe";
+  provider!: "paystack" | "flutterwave" | "stripe";
 
   /** Provider's unique event ID — the unique index lives here */
   @Prop({ required: true, unique: true })
-  eventId: string;
+  eventId!: string;
 
   @Prop({ required: true })
-  type: string;
+  type!: string;
 
   @Prop({ type: Object, default: {} })
-  payload: Record<string, unknown>;
+  payload!: Record<string, unknown>;
 
   @Prop({ type: String, default: null })
-  orderId: string | null;
+  orderId!: string | null;
 
   @Prop({ required: true })
-  processedAt: Date;
+  processedAt!: Date;
 }
 
 export const WebhookEventSchema = SchemaFactory.createForClass(WebhookEvent);

@@ -7,36 +7,36 @@ export type UserDocument = User & Document;
 @Schema({ timestamps: true, collection: "users" })
 export class User {
   @Prop({ required: true, trim: true })
-  name: string;
+  name!: string;
 
   @Prop({ required: true, unique: true, lowercase: true, trim: true })
-  email: string;
+  email!: string;
 
   /** Nigerian phone number — stored as-entered, e.g. "+2348011223344" */
   @Prop({ type: String, default: null, trim: true })
-  phone: string | null;
+  phone!: string | null;
 
   @Prop({ required: true, select: false })
-  passwordHash: string;
+  passwordHash!: string;
 
   @Prop({
     type: String,
     enum: ["super_admin", "merchandiser", "support_agent", "customer", "staff"],
     default: "customer",
   })
-  role: UserRole;
+  role!: UserRole;
 
   @Prop({ default: true })
-  active: boolean;
+  active!: boolean;
 
   @Prop({ type: String, select: false, default: null })
-  refreshTokenHash: string | null;
+  refreshTokenHash!: string | null;
 
   @Prop({ default: false })
-  twoFactorEnabled: boolean;
+  twoFactorEnabled!: boolean;
 
   @Prop({ type: String, select: false, default: null })
-  twoFactorSecret: string | null;
+  twoFactorSecret!: string | null;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

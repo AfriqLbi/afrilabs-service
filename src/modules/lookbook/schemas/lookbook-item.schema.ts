@@ -6,24 +6,24 @@ export type LookbookItemDocument = LookbookItem & Document;
 @Schema({ timestamps: true, collection: "lookbook_items" })
 export class LookbookItem {
   @Prop({ required: true })
-  title: string;
+  title!: string;
 
   @Prop({ default: "" })
-  caption: string;
+  caption!: string;
 
   @Prop({ required: true })
-  imageUrl: string;
+  imageUrl!: string;
 
   /** Collection / season label, e.g. "SS 2025" */
   @Prop({ default: "" })
-  season: string;
+  season!: string;
 
   /** Controls display order — lower = first */
   @Prop({ default: 0 })
-  sortOrder: number;
+  sortOrder!: number;
 
   @Prop({ default: true })
-  published: boolean;
+  published!: boolean;
 }
 
 export const LookbookItemSchema = SchemaFactory.createForClass(LookbookItem);

@@ -42,7 +42,7 @@ export const PRODUCTION_STAGE_ORDER: ProductionStage[] = [
 export class ProductionLog {
   /** The Order or CustomOrder MongoDB _id. */
   @Prop({ required: true, index: true })
-  orderId: string;
+  orderId!: string;
 
   /** "order" for standard catalog orders; "custom_order" for custom orders. */
   @Prop({
@@ -51,33 +51,33 @@ export class ProductionLog {
     required: true,
     index: true,
   })
-  orderType: "order" | "custom_order";
+  orderType!: "order" | "custom_order";
 
   /** Human-readable order reference, e.g. "AV-2601" or "CO-1001". */
   @Prop({ required: true })
-  orderReference: string;
+  orderReference!: string;
 
   @Prop({
     type: String,
     enum: ["cutting", "sewing", "quality_check", "ready", "delivered"],
     required: true,
   })
-  stage: ProductionStage;
+  stage!: ProductionStage;
 
   /** userId of the staff or admin who made the update. */
   @Prop({ required: true })
-  updatedBy: string;
+  updatedBy!: string;
 
   /** Display name of the updater — denormalized for quick display. */
   @Prop({ type: String, default: null })
-  updatedByName: string | null;
+  updatedByName!: string | null;
 
   /**
    * Optional admin/staff note. Kept as a single text field (no photo logging at v1).
    * Per PRD §1.8: "photo/note logging adds ongoing admin data-entry time that may go unused."
    */
   @Prop({ type: String, default: null, maxlength: 500 })
-  note: string | null;
+  note!: string | null;
 }
 
 export const ProductionLogSchema = SchemaFactory.createForClass(ProductionLog);

@@ -10,87 +10,87 @@ export type ProductDocument = Product & Document;
 @Schema({ timestamps: true, collection: "products" })
 export class Product {
   @Prop({ required: true, unique: true, trim: true })
-  sku: string;
+  sku!: string;
 
   @Prop({ required: true, unique: true, lowercase: true, trim: true })
-  slug: string;
+  slug!: string;
 
   @Prop({ required: true, trim: true })
-  title: string;
+  title!: string;
 
   @Prop({ required: true })
-  brandId: string;
+  brandId!: string;
 
   @Prop({ required: true })
-  brandName: string;
+  brandName!: string;
 
   @Prop({ required: true })
-  brandSlug: string;
+  brandSlug!: string;
 
   @Prop({ required: true })
-  categoryId: string;
+  categoryId!: string;
 
   @Prop({ required: true })
-  categoryName: string;
+  categoryName!: string;
 
   @Prop({ required: true })
-  categorySlug: string;
+  categorySlug!: string;
 
   @Prop({ type: String, default: null })
-  subcategoryId: string | null;
+  subcategoryId!: string | null;
 
   @Prop({ type: String, default: null })
-  subcategoryName: string | null;
+  subcategoryName!: string | null;
 
   @Prop({ type: String, default: null })
-  subcategorySlug: string | null;
+  subcategorySlug!: string | null;
 
   @Prop({ required: true, min: 0 })
-  price: number;
+  price!: number;
 
   @Prop({ type: Number, default: null })
-  compareAtPrice: number | null;
+  compareAtPrice!: number | null;
 
   @Prop({ default: 0, min: 0 })
-  stock: number;
+  stock!: number;
 
   @Prop({ default: 0, min: 0 })
-  reserved: number;
+  reserved!: number;
 
   @Prop({ type: [String], default: [] })
-  images: string[];
+  images!: string[];
 
   @Prop({ default: "" })
-  description: string;
+  description!: string;
 
   @Prop({ default: "" })
-  descriptionHtml: string;
+  descriptionHtml!: string;
 
   @Prop({ type: [{ label: String, value: String }], default: [] })
-  specs: { label: string; value: string }[];
+  specs!: { label: string; value: string }[];
 
   @Prop({
     type: String,
     enum: ["active", "draft", "archived"],
     default: "draft",
   })
-  status: ProductStatus;
+  status!: ProductStatus;
 
   @Prop({
     type: [String],
     enum: ["new_arrival", "best_seller", "featured", "deal"],
     default: [],
   })
-  tags: ProductTag[];
+  tags!: ProductTag[];
 
   @Prop({ default: 0 })
-  ratingAvg: number;
+  ratingAvg!: number;
 
   @Prop({ default: 0 })
-  ratingCount: number;
+  ratingCount!: number;
 
   @Prop({ type: String, default: null })
-  lastModifiedBy: string | null;
+  lastModifiedBy!: string | null;
 
   // ── Shipping weight / dimensions ──────────────────────────────────────────
 
@@ -100,7 +100,7 @@ export class Product {
    * A product should not be publishable without this field set.
    */
   @Prop({ type: Number, default: null })
-  packageWeightGrams: number | null;
+  packageWeightGrams!: number | null;
 
   /**
    * Outer dimensions of the packed parcel in centimetres.
@@ -111,7 +111,7 @@ export class Product {
     default: null,
     _id: false,
   })
-  packageDims: { l: number; w: number; h: number } | null;
+  packageDims!: { l: number; w: number; h: number } | null;
 }
 
 export const ProductSchema = SchemaFactory.createForClass(Product);

@@ -6,16 +6,16 @@ export type FxRateDocument = FxRate & Document;
 @Schema({ timestamps: true, collection: "fx_rates" })
 export class FxRate {
   @Prop({ required: true, unique: true, uppercase: true })
-  currency: string;
+  currency!: string;
 
   @Prop({ required: true })
-  rate: number;
+  rate!: number;
 
   @Prop({ required: true })
-  refreshedAt: Date;
+  refreshedAt!: Date;
 
   @Prop({ default: "manual" })
-  source: string;
+  source!: string;
 }
 
 export const FxRateSchema = SchemaFactory.createForClass(FxRate);

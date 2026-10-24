@@ -15,14 +15,14 @@ export type MeasurementProfileDocument = MeasurementProfile & Document;
  */
 export class MeasurementField {
   @Prop({ required: true, trim: true })
-  key: string;
+  key!: string;
 
   @Prop({ required: true, trim: true })
-  label: string;
+  label!: string;
 
   /** Centimetres. Service-layer validation: > 0 and <= 400. */
   @Prop({ required: true, type: Number })
-  value: number;
+  value!: number;
 }
 
 /**
@@ -44,7 +44,7 @@ export class MeasurementField {
 export class MeasurementProfile {
   /** References auth `users._id`. Stored as string to avoid populate overhead. */
   @Prop({ required: true, index: true })
-  userId: string;
+  userId!: string;
 
   /**
    * Free-form garment type that matches the category/section name.
@@ -52,22 +52,22 @@ export class MeasurementProfile {
    * Stored lowercase-trimmed for consistent lookup.
    */
   @Prop({ required: true, trim: true, lowercase: true })
-  garmentType: string;
+  garmentType!: string;
 
   /** Optional human-readable label for the garment type shown in the UI. */
   @Prop({ type: String, default: null })
-  garmentLabel: string | null;
+  garmentLabel!: string | null;
 
   /**
    * Flexible array of measurement fields — no fixed columns.
    * Sorting by key is the client's responsibility.
    */
   @Prop({ type: [Object], default: [] })
-  measurements: MeasurementField[];
+  measurements!: MeasurementField[];
 
   /** Optional free-text note from the customer ("prefer a little extra room"). */
   @Prop({ type: String, default: null, maxlength: 500 })
-  notes: string | null;
+  notes!: string | null;
 }
 
 export const MeasurementProfileSchema =

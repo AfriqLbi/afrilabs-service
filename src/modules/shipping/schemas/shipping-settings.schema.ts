@@ -11,19 +11,19 @@ export type ShippingSettingsDocument = ShippingSettings & Document;
 export class ShippingSettings {
   /** Hours within which an admin must submit a quote */
   @Prop({ type: Number, default: 24 })
-  quoteSlaHours: number;
+  quoteSlaHours!: number;
 
   /** Default validity window (days) for a submitted quote */
   @Prop({ type: Number, default: 7 })
-  quoteValidDays: number;
+  quoteValidDays!: number;
 
   /** Comma-separated admin emails for quote alerts */
   @Prop({ type: String, default: "" })
-  adminAlertEmails: string;
+  adminAlertEmails!: string;
 
   /** Upper limit on a single quote amount (NGN kobo) — catches typos */
   @Prop({ type: Number, default: 50000000 })
-  quoteAmountCapNgn: number;
+  quoteAmountCapNgn!: number;
 }
 
 export const ShippingSettingsSchema = SchemaFactory.createForClass(ShippingSettings);

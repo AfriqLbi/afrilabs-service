@@ -2,41 +2,44 @@ import { ApiProperty } from "@nestjs/swagger";
 import { IsInt, IsNotEmpty, IsString, Min } from "class-validator";
 
 export class AddToCartDto {
-  @ApiProperty({ example: "64a1f2c8e3b7a900120d9999", description: "Product ObjectId" })
+  @ApiProperty({
+    example: "64a1f2c8e3b7a900120d9999",
+    description: "Product ObjectId",
+  })
   @IsString()
   @IsNotEmpty()
-  productId: string;
+  productId!: string;
 
   @ApiProperty({ example: 1, minimum: 1 })
   @IsInt()
   @Min(1)
-  quantity: number;
+  quantity!: number;
 }
 
 export class UpdateLineDto {
   @ApiProperty({ example: "64a1f2c8e3b7a900120d9999" })
   @IsString()
   @IsNotEmpty()
-  productId: string;
+  productId!: string;
 
   @ApiProperty({ example: 2, description: "Set to 0 to remove the line" })
   @IsInt()
   @Min(0)
-  quantity: number;
+  quantity!: number;
 }
 
 export class RemoveLineDto {
   @ApiProperty({ example: "64a1f2c8e3b7a900120d9999" })
   @IsString()
   @IsNotEmpty()
-  productId: string;
+  productId!: string;
 }
 
 export class ApplyPromoDto {
   @ApiProperty({ example: "COOL20" })
   @IsString()
   @IsNotEmpty()
-  code: string;
+  code!: string;
 }
 
 export class MergeCartDto {
@@ -46,5 +49,5 @@ export class MergeCartDto {
   })
   @IsString()
   @IsNotEmpty()
-  guestId: string;
+  guestId!: string;
 }

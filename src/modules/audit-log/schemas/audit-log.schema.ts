@@ -13,29 +13,29 @@ export class AuditLog {
    *   customer:<userId>    — customer self-service
    */
   @Prop({ required: true, index: true })
-  actor: string;
+  actor!: string;
 
   /** e.g. "product.update", "order.refund", "sync.approve" */
   @Prop({ required: true })
-  action: string;
+  action!: string;
 
   @Prop({ required: true })
-  entityType: string;
+  entityType!: string;
 
   @Prop({ required: true })
-  entityId: string;
+  entityId!: string;
 
   @Prop({ type: Object, default: null })
-  before: Record<string, unknown> | null;
+  before!: Record<string, unknown> | null;
 
   @Prop({ type: Object, default: null })
-  after: Record<string, unknown> | null;
+  after!: Record<string, unknown> | null;
 
   @Prop({ type: String, default: null })
-  note: string | null;
+  note!: string | null;
 
   @Prop({ required: true, default: () => new Date() })
-  createdAt: Date;
+  createdAt!: Date;
 }
 
 export const AuditLogSchema = SchemaFactory.createForClass(AuditLog);
