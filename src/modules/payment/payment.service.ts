@@ -52,7 +52,7 @@ export class PaymentService {
     const secretKey = this.config.get<string>("paystack.secretKey");
     const orderId = (order._id as unknown as Types.ObjectId).toString();
     const body = JSON.stringify({
-      email: order.customerEmail ?? "guest@alphavista.ng",
+      email: order.customerEmail ?? "guest@labiafrica.ng",
       amount: Math.round(order.total * 100),
       reference: order.paymentReference,
       callback_url: `${this.config.get("storefront.baseUrl")}/checkout/confirm?ref=${order.paymentReference}`,
@@ -103,7 +103,7 @@ export class PaymentService {
       currency,
       redirect_url: `${this.config.get("storefront.baseUrl")}/checkout/confirm?ref=${order.paymentReference}`,
       customer: {
-        email: order.customerEmail ?? "guest@labi.ng",
+        email: order.customerEmail ?? "guest@labiafrica.ng",
         name: order.customerName ?? "Guest",
       },
       meta: { orderId },

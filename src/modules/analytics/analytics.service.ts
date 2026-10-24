@@ -15,29 +15,30 @@ export class AnalyticsService {
   // ─── Dashboard metrics — mirrors admin-data.ts frontend shapes ───────────
 
   async getDashboardMetrics() {
-    const [revenueResult, orderCount, pendingCount, unitsSold, lowStockCount] = await Promise.all([
-      this.orderModel.aggregate([
-        { $match: { status: { $in: ["paid", "fulfilled"] } } },
-        {
-          $group: {
-            _id: null,
-            total: { $sum: "$total" },
-            count: { $sum: 1 },
+    const [revenueResult, orderCount, pendingCount, unitsSold, lowStockCount] =
+      await Promise.all([
+        this.orderModel.aggregate([
+          { $match: { status: { $in: ["paid", "fulfilled"] } } },
+          {
+            $group: {
+              _id: null,
+              total: { $sum: "$total" },
+              count: { $sum: 1 },
+            },
           },
-        },
-      ]),
-      this.orderModel.countDocuments(),
-      this.orderModel.countDocuments({ status: "pending_payment" }),
-      this.orderModel.aggregate([
-        { $match: { status: { $in: ["paid", "fulfilled"] } } },
-        { $unwind: "$items" },
-        { $group: { _id: null, total: { $sum: "$items.qty" } } },
-      ]),
-      this.productModel.countDocuments({
-        status: "active",
-        $expr: { $lte: [{ $subtract: ["$stock", "$reserved"] }, 5] },
-      }),
-    ]);
+        ]),
+        this.orderModel.countDocuments(),
+        this.orderModel.countDocuments({ status: "pending_payment" }),
+        this.orderModel.aggregate([
+          { $match: { status: { $in: ["paid", "fulfilled"] } } },
+          { $unwind: "$items" },
+          { $group: { _id: null, total: { $sum: "$items.qty" } } },
+        ]),
+        this.productModel.countDocuments({
+          status: "active",
+          $expr: { $lte: [{ $subtract: ["$stock", "$reserved"] }, 5] },
+        }),
+      ]);
 
     const paidRevenue = revenueResult[0]?.total ?? 0;
     const paidCount = revenueResult[0]?.count ?? 0;
@@ -110,10 +111,17 @@ export class AnalyticsService {
     const result = await this.orderModel.aggregate([
       { $match: { status: { $in: ["paid", "fulfilled"] } } },
       { $unwind: "$items" },
+      // items.productId is stored as a string; cast to ObjectId before the lookup
+      // so it matches the products._id field (which is an ObjectId).
+      {
+        $addFields: {
+          "items.productOid": { $toObjectId: "$items.productId" },
+        },
+      },
       {
         $lookup: {
           from: "products",
-          localField: "items.productId",
+          localField: "items.productOid",
           foreignField: "_id",
           as: "product",
         },
@@ -135,7 +143,10 @@ export class AnalyticsService {
 
     return result.map((r) => ({
       name: (r._id as string) ?? "Unknown",
-      value: totalRevenue > 0 ? Math.round(((r.revenue as number) / totalRevenue) * 100) : 0,
+      value:
+        totalRevenue > 0
+          ? Math.round(((r.revenue as number) / totalRevenue) * 100)
+          : 0,
     }));
   }
 
@@ -152,7 +163,16 @@ export class AnalyticsService {
           revenue: {
             $sum: { $multiply: ["$items.unitPrice", "$items.qty"] },
           },
-          unitsSold: { $sum: "$items.qty" },
+          units: { $sum: "$items.qty" },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          productId: { $toString: "$_id" },
+          title: 1,
+          revenue: 1,
+          units: 1,
         },
       },
       { $sort: { revenue: -1 } },
