@@ -177,18 +177,26 @@ export class OrderController {
     return this.orderService.findByReferenceStatus(ref);
   }
 
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(OptionalJwtAuthGuard)
   @Get(":id")
-  @ApiOperation({ summary: "Get a single order by id" })
+  @ApiOperation({
+    summary: "Get a single order by id",
+    description:
+      "Authenticated owners can access their order with their session cookie. " +
+      "Guests must supply the signed `token` query param issued with the pay link.",
+  })
   @ApiParam({ name: "id", description: "Order ObjectId" })
   @ApiEnvelopeOk(OrderResponseDto)
   @ApiNotFoundResponse({
     description: "Order not found",
     type: ApiErrorResponse,
   })
-  getOrder(@Param("id") id: string) {
-    return this.orderService.findById(id);
+  getOrder(
+    @Param("id") id: string,
+    @Query("token") token: string | undefined,
+    @CurrentUser() user: JwtPayload | undefined,
+  ) {
+    return this.orderService.findByIdForCustomer(id, user?.sub ?? null, token);
   }
 
   @UseGuards(OptionalJwtAuthGuard)

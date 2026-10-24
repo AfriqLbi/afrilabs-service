@@ -630,6 +630,47 @@ export class OrderService {
     return order;
   }
 
+  /**
+   * Customer-facing single-order fetch.
+   *
+   * Access rules (same pattern as payOrder):
+   *  1. Authenticated owner  — userId matches order.customerId  (no token needed)
+   *  2. Guest / anonymous    — must supply a valid signed linkToken for this order
+   *  3. Order has no owner   — guest orders created without an account; linkToken required
+   */
+  async findByIdForCustomer(
+    id: string,
+    userId: string | null,
+    linkToken?: string,
+  ): Promise<OrderDocument> {
+    const order = await this.findById(id);
+
+    // Authenticated owner — allow immediately
+    if (userId && order.customerId && order.customerId.toString() === userId) {
+      return order;
+    }
+
+    // Any other caller must provide a valid linkToken
+    if (!linkToken) {
+      throw new ForbiddenException(
+        "A signed link token is required to view this order",
+      );
+    }
+
+    const secret = this.config.get<string>("shipping.orderLinkSecret")!;
+    try {
+      const payload = verifyLinkToken(linkToken, secret);
+      if (payload.orderId !== id) {
+        throw new ForbiddenException("Link token does not match this order");
+      }
+    } catch (err) {
+      if (err instanceof ForbiddenException) throw err;
+      throw new ForbiddenException("Invalid or expired link token");
+    }
+
+    return order;
+  }
+
   async findByCustomer(userId: string, pagination: PaginationDto) {
     const filter = { customerId: userId };
     const [items, total] = await Promise.all([
