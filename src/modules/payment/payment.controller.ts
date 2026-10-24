@@ -37,7 +37,7 @@ class InitializePaymentDto {
   })
   @IsString()
   @IsNotEmpty()
-  orderId: string;
+  orderId!: string;
 
   @ApiProperty({
     enum: ["paystack", "flutterwave", "stripe"],
@@ -47,7 +47,7 @@ class InitializePaymentDto {
       "when STRIPE_ENABLED=true; Flutterwave multi-currency otherwise.",
   })
   @IsEnum(["paystack", "flutterwave", "stripe"])
-  provider: "paystack" | "flutterwave" | "stripe";
+  provider!: "paystack" | "flutterwave" | "stripe";
 }
 
 @ApiTags("Payments")

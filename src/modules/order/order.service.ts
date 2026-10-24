@@ -606,6 +606,24 @@ export class OrderService {
     return this.orderModel.findOne({ paymentReference: ref });
   }
 
+  /**
+   * Public lookup used by the checkout confirmation page after a customer
+   * returns from the payment gateway. Returns a lean projection with only
+   * the fields the confirm screen needs — no shipping address, items, or
+   * other PII. Payment status is confirmed exclusively via webhook; this only
+   * reflects the persisted order state.
+   */
+  async findByReferenceStatus(ref: string) {
+    const order = await this.orderModel
+      .findOne({ paymentReference: ref })
+      .select(
+        "orderNumber status customerEmail customerName paymentProvider checkoutUrl",
+      )
+      .lean();
+    if (!order) throw new NotFoundException("Order not found");
+    return order;
+  }
+
   async findById(id: string): Promise<OrderDocument> {
     const order = await this.orderModel.findById(id);
     if (!order) throw new NotFoundException("Order not found");

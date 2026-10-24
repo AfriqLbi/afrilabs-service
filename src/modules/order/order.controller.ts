@@ -155,6 +155,28 @@ export class OrderController {
     return this.orderService.findByCustomer(user.sub, pagination);
   }
 
+  @Get("reference/:ref")
+  @ApiOperation({
+    summary: "Look up an order by payment reference (public)",
+    description:
+      "Used by the checkout confirmation page after a customer returns from " +
+      "the payment gateway (`/checkout/confirm?ref=…`). Returns only the fields " +
+      "the confirm screen needs. Payment is confirmed exclusively via webhook " +
+      "— this endpoint only reflects the persisted order status.",
+  })
+  @ApiParam({
+    name: "ref",
+    description: "paymentReference returned by POST /orders",
+  })
+  @ApiEnvelopeOk(OrderResponseDto)
+  @ApiNotFoundResponse({
+    description: "Order not found",
+    type: ApiErrorResponse,
+  })
+  getOrderByReference(@Param("ref") ref: string) {
+    return this.orderService.findByReferenceStatus(ref);
+  }
+
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Get(":id")
