@@ -22,7 +22,7 @@ class SetStockDto {
   @ApiProperty({ example: "64a1f2c8e3b7a900120d9999", description: "Product ObjectId" })
   @IsString()
   @IsNotEmpty()
-  productId: string;
+  productId!: string;
 
   @ApiProperty({
     example: 40,
@@ -30,7 +30,7 @@ class SetStockDto {
   })
   @IsInt()
   @Min(0)
-  stock: number;
+  stock!: number;
 }
 
 @ApiTags("Admin — Inventory")

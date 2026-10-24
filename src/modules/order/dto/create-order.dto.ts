@@ -19,21 +19,21 @@ export class ShippingAddressDto {
   @ApiProperty({ example: "Adaeze Okonkwo" })
   @IsString()
   @IsNotEmpty()
-  fullName: string;
+  fullName!: string;
   @ApiProperty({ example: "+2348011223344" })
   @IsString()
   @IsNotEmpty()
-  phone: string;
+  phone!: string;
   @ApiProperty({ example: "12 Aminu Kano Crescent" })
   @IsString()
   @IsNotEmpty()
-  line1: string;
+  line1!: string;
   @ApiPropertyOptional({ example: "Suite 4B" })
   @IsOptional()
   @IsString()
   line2?: string;
-  @ApiProperty({ example: "Abuja" }) @IsString() @IsNotEmpty() city: string;
-  @ApiProperty({ example: "FCT" }) @IsString() @IsNotEmpty() state: string;
+  @ApiProperty({ example: "Abuja" }) @IsString() @IsNotEmpty() city!: string;
+  @ApiProperty({ example: "FCT" }) @IsString() @IsNotEmpty() state!: string;
   @ApiPropertyOptional({ example: "Nigeria", default: "Nigeria" })
   @IsOptional()
   @IsString()
@@ -52,7 +52,7 @@ export class FxRateSnapshotDto {
   })
   @IsNumber({ allowNaN: false, allowInfinity: false })
   @IsPositive()
-  rate: number;
+  rate!: number;
 
   @ApiProperty({
     example: 2,
@@ -61,7 +61,7 @@ export class FxRateSnapshotDto {
   @IsNumber({ allowNaN: false, allowInfinity: false })
   @Min(0)
   @Max(20)
-  buffer: number;
+  buffer!: number;
 }
 
 export class CreateOrderDto {
@@ -88,12 +88,12 @@ export class CreateOrderDto {
     example: "paystack",
   })
   @IsEnum(["paystack", "flutterwave", "stripe"])
-  paymentProvider: PaymentProvider;
+  paymentProvider!: PaymentProvider;
 
   @ApiProperty({ type: ShippingAddressDto })
   @ValidateNested()
   @Type(() => ShippingAddressDto)
-  shippingAddress: ShippingAddressDto;
+  shippingAddress!: ShippingAddressDto;
 
   @ApiPropertyOptional({ example: "COOL20" })
   @IsOptional()

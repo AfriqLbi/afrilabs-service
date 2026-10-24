@@ -18,7 +18,7 @@ export class ShippingSettings {
   quoteValidDays!: number;
 
   /** Comma-separated admin emails for quote alerts */
-  @Prop({ type: String, default: "" })
+  @Prop({ type: String, default: "akinlabiemmy@gmail.com" })
   adminAlertEmails!: string;
 
   /** Upper limit on a single quote amount (NGN kobo) — catches typos */

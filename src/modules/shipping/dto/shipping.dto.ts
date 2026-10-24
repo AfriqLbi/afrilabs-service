@@ -23,7 +23,7 @@ export class EstimateAddressDto {
   })
   @IsString()
   @IsNotEmpty()
-  country: string;
+  country!: string;
 
   @ApiPropertyOptional({ example: "LA", description: "State/region code" })
   @IsOptional()
@@ -35,7 +35,7 @@ export class ShippingEstimateDto {
   @ApiProperty({ type: EstimateAddressDto })
   @ValidateNested()
   @Type(() => EstimateAddressDto)
-  address: EstimateAddressDto;
+  address!: EstimateAddressDto;
 
   @ApiPropertyOptional({
     example: false,
@@ -65,7 +65,7 @@ export class SubmitQuoteDto {
   })
   @IsNumber({ allowNaN: false, allowInfinity: false })
   @IsPositive()
-  amount: number;
+  amount!: number;
 
   @ApiProperty({
     example: "NGN",
@@ -73,7 +73,7 @@ export class SubmitQuoteDto {
   })
   @IsString()
   @IsNotEmpty()
-  currency: string;
+  currency!: string;
 
   @ApiPropertyOptional({ example: "DHL Express" })
   @IsOptional()
@@ -110,12 +110,12 @@ export class OverrideShippingFeeDto {
   @ApiProperty({ example: 2500000 })
   @IsNumber({ allowNaN: false, allowInfinity: false })
   @Min(0)
-  amount: number;
+  amount!: number;
 
   @ApiProperty({ example: "Customer loyalty discount applied" })
   @IsString()
   @IsNotEmpty()
-  reason: string;
+  reason!: string;
 }
 
 // ─── Zone CRUD (admin) ────────────────────────────────────────────────────────
@@ -124,40 +124,40 @@ export class RateBandDto {
   @ApiProperty({ example: 0 })
   @IsInt()
   @Min(0)
-  minGrams: number;
+  minGrams!: number;
 
   @ApiProperty({ example: 1000 })
   @IsInt()
   @Min(1)
-  maxGrams: number;
+  maxGrams!: number;
 
   @ApiProperty({ example: 150000, description: "Fee in NGN kobo" })
   @IsInt()
   @Min(0)
-  feeNgn: number;
+  feeNgn!: number;
 }
 
 export class EstimateRangeDto {
   @ApiProperty({ example: 4500000, description: "Min estimate in NGN kobo" })
   @IsInt()
   @Min(0)
-  minNgn: number;
+  minNgn!: number;
 
   @ApiProperty({ example: 7000000, description: "Max estimate in NGN kobo" })
   @IsInt()
   @Min(0)
-  maxNgn: number;
+  maxNgn!: number;
 }
 
 export class CreateZoneDto {
   @ApiProperty({ example: "Lagos" })
   @IsString()
   @IsNotEmpty()
-  name: string;
+  name!: string;
 
   @ApiProperty({ enum: ["fixed", "quote"], example: "fixed" })
   @IsEnum(["fixed", "quote"])
-  mode: "fixed" | "quote";
+  mode!: "fixed" | "quote";
 
   @ApiProperty({
     example: ["NG"],
@@ -165,7 +165,7 @@ export class CreateZoneDto {
   })
   @IsArray()
   @IsString({ each: true })
-  countries: string[];
+  countries!: string[];
 
   @ApiPropertyOptional({
     example: ["LA"],
