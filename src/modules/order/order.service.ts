@@ -277,6 +277,32 @@ export class OrderService {
         );
     }
 
+    // 7. Initialize hosted checkout for non-quote orders.
+    //    The order is already persisted with status "pending_payment"; we
+    //    create the gateway checkout session and persist its URL so the
+    //    frontend can redirect immediately (matches the POST /orders contract
+    //    documented in OrderController.createOrder).
+    if (!isQuoteZone) {
+      try {
+        const { checkoutUrl } = await this.paymentRouter.initializePayment(
+          order!,
+          dto.paymentProvider,
+        );
+        const updated = await this.orderModel.findByIdAndUpdate(
+          order!._id,
+          { checkoutUrl },
+          { new: true },
+        );
+        if (updated) order = updated;
+      } catch (err) {
+        // Non-fatal: the order exists and stock is reserved. The customer can
+        // still pay via POST /orders/:id/pay, which re-initializes a session.
+        this.logger.error(
+          `Payment initialization failed for ${order!.orderNumber}: ${(err as Error).message}`,
+        );
+      }
+    }
+
     return order!;
   }
 
