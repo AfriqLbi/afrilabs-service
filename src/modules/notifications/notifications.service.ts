@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { Resend } from "resend";
 import { OrderDocument } from "../order/schemas/order.schema";
 import { CustomOrderDocument } from "../custom-order/schemas/custom-order.schema";
+import { createLinkToken } from "../../common/utils/link-token";
 
 // ─── Price formatting ─────────────────────────────────────────────────────────
 
@@ -314,13 +315,38 @@ export class NotificationsService {
       .replace(/\/$/, "");
   }
 
+  // ─── Guest link-token helper ───────────────────────────────────────────────
+
+  /**
+   * Returns the order tracking URL.  For guest orders (no customerId) a signed
+   * link token is appended so the guest can both view the order AND pay without
+   * being logged in.  Authenticated orders get a plain URL — the session cookie
+   * is enough.
+   */
+  private orderUrl(order: OrderDocument): string {
+    const orderId = (order._id as unknown as { toString(): string }).toString();
+    const base = `${this.storefrontUrl}/orders/${orderId}`;
+
+    // Only guest orders need a token — authenticated owners use their session
+    if (order.customerId) return base;
+
+    try {
+      const secret = this.config.get<string>("shipping.orderLinkSecret");
+      if (!secret) return base; // misconfigured — fall back to plain URL
+      const token = createLinkToken({ orderId }, secret);
+      return `${base}?token=${encodeURIComponent(token)}`;
+    } catch {
+      return base;
+    }
+  }
+
   // ─── Order confirmation (catalog order) ───────────────────────────────────
 
   async sendOrderConfirmation(order: OrderDocument): Promise<void> {
     const to = order.customerEmail;
     if (!to) return;
 
-    const orderUrl = `${this.storefrontUrl}/orders/${(order._id as unknown as { toString(): string }).toString()}`;
+    const orderUrl = this.orderUrl(order);
     const currency = order.chargeCurrency ?? "NGN";
     const isMultiCurrency = currency !== "NGN" && order.chargeTotal != null;
 
@@ -413,7 +439,7 @@ export class NotificationsService {
     const to = order.customerEmail;
     if (!to) return;
 
-    const orderUrl = `${this.storefrontUrl}/orders/${(order._id as unknown as { toString(): string }).toString()}`;
+    const orderUrl = this.orderUrl(order);
 
     const config: Record<
       string,
@@ -741,7 +767,7 @@ export class NotificationsService {
     const to = order.customerEmail;
     if (!to) return;
 
-    const orderUrl = `${this.storefrontUrl}/orders/${(order._id as unknown as { toString(): string }).toString()}`;
+    const orderUrl = this.orderUrl(order);
     const quote = order.shippingQuote;
     const currency = order.chargeCurrency ?? "NGN";
     const isMulti = currency !== "NGN" && order.chargeTotal != null;
@@ -854,7 +880,7 @@ export class NotificationsService {
     const to = order.customerEmail;
     if (!to) return;
 
-    const orderUrl = `${this.storefrontUrl}/orders/${(order._id as unknown as { toString(): string }).toString()}`;
+    const orderUrl = this.orderUrl(order);
     const validUntil = order.shippingQuote?.validUntil;
     const expiresDisplay = validUntil
       ? new Date(validUntil).toLocaleString("en-NG", {
@@ -894,7 +920,7 @@ export class NotificationsService {
     const to = order.customerEmail;
     if (!to) return;
 
-    const orderUrl = `${this.storefrontUrl}/orders/${(order._id as unknown as { toString(): string }).toString()}`;
+    const orderUrl = this.orderUrl(order);
 
     const body = `
       ${heading("Your shipping quote has expired")}
@@ -931,7 +957,7 @@ export class NotificationsService {
     const isRefund = type === "refund";
     const currency = order.chargeCurrency ?? "NGN";
     const amountDisplay = fmtMinor(amount, currency);
-    const orderUrl = `${this.storefrontUrl}/orders/${(order._id as unknown as { toString(): string }).toString()}`;
+    const orderUrl = this.orderUrl(order);
 
     const body = `
       ${heading(isRefund ? "Shipping refund processed" : "Additional shipping payment required")}
