@@ -1,11 +1,24 @@
-import { IsArray, IsBoolean, IsEnum, IsNumber, IsOptional, IsString, Min } from "class-validator";
+import {
+  IsArray,
+  IsBoolean,
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
+} from "class-validator";
 import { Transform, Type } from "class-transformer";
 import { ApiPropertyOptional } from "@nestjs/swagger";
 import { PaginationDto } from "../../../common/dto/pagination.dto";
 import { ProductTag, ProductStatus } from "../schemas/product.schema";
 
 export type SortKey =
-  "featured" | "price_asc" | "price_desc" | "newest" | "best_selling" | "rating";
+  | "featured"
+  | "price_asc"
+  | "price_desc"
+  | "newest"
+  | "best_selling"
+  | "rating";
 
 export class QueryProductsDto extends PaginationDto {
   @ApiPropertyOptional({ description: "Full-text search query" })
@@ -13,7 +26,11 @@ export class QueryProductsDto extends PaginationDto {
   @IsString()
   q?: string;
 
-  @ApiPropertyOptional({ example: "tvs" })
+  @ApiPropertyOptional({
+    example: "men,cargopants",
+    description:
+      "Category slug(s) — comma-separated for multi-category filter. A product appears if it belongs to ANY of the listed categories.",
+  })
   @IsOptional()
   @IsString()
   categorySlug?: string;
@@ -23,7 +40,10 @@ export class QueryProductsDto extends PaginationDto {
   @IsString()
   subcategorySlug?: string;
 
-  @ApiPropertyOptional({ example: "hisense,lg", description: "Comma-separated brand slugs" })
+  @ApiPropertyOptional({
+    example: "hisense,lg",
+    description: "Comma-separated brand slugs",
+  })
   @IsOptional()
   @IsString()
   brands?: string;
@@ -35,7 +55,10 @@ export class QueryProductsDto extends PaginationDto {
   @Min(0)
   min?: number;
 
-  @ApiPropertyOptional({ example: 1000000, description: "Maximum price in NGN" })
+  @ApiPropertyOptional({
+    example: 1000000,
+    description: "Maximum price in NGN",
+  })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
@@ -55,19 +78,38 @@ export class QueryProductsDto extends PaginationDto {
   rating?: number;
 
   @ApiPropertyOptional({
-    enum: ["featured", "price_asc", "price_desc", "newest", "best_selling", "rating"],
+    enum: [
+      "featured",
+      "price_asc",
+      "price_desc",
+      "newest",
+      "best_selling",
+      "rating",
+    ],
     default: "featured",
   })
   @IsOptional()
-  @IsEnum(["featured", "price_asc", "price_desc", "newest", "best_selling", "rating"])
+  @IsEnum([
+    "featured",
+    "price_asc",
+    "price_desc",
+    "newest",
+    "best_selling",
+    "rating",
+  ])
   sort?: SortKey;
 
-  @ApiPropertyOptional({ enum: ["new_arrival", "best_seller", "featured", "deal"] })
+  @ApiPropertyOptional({
+    enum: ["new_arrival", "best_seller", "featured", "deal"],
+  })
   @IsOptional()
   @IsEnum(["new_arrival", "best_seller", "featured", "deal"], { each: true })
   tag?: ProductTag;
 
-  @ApiPropertyOptional({ enum: ["active", "draft", "archived"], description: "Admin only" })
+  @ApiPropertyOptional({
+    enum: ["active", "draft", "archived"],
+    description: "Admin only",
+  })
   @IsOptional()
   @IsEnum(["active", "draft", "archived"])
   status?: ProductStatus;

@@ -51,9 +51,20 @@ export class PaymentService {
   ): Promise<{ checkoutUrl: string; reference: string }> {
     const secretKey = this.config.get<string>("paystack.secretKey");
     const orderId = (order._id as unknown as Types.ObjectId).toString();
+    const currency = order.chargeCurrency ?? "NGN";
+
+    // For multi-currency orders use chargeTotal (already in minor units of
+    // chargeCurrency — e.g. GBP pence).  For NGN orders, order.total is in
+    // naira so multiply by 100 to get kobo, which is what Paystack expects.
+    const amount =
+      currency !== "NGN" && order.chargeTotal != null
+        ? order.chargeTotal
+        : Math.round(order.total * 100);
+
     const body = JSON.stringify({
       email: order.customerEmail ?? "guest@labiafrica.ng",
-      amount: Math.round(order.total * 100),
+      amount,
+      currency, // Paystack will present the checkout in this currency
       reference: order.paymentReference,
       callback_url: `${this.config.get("storefront.baseUrl")}/checkout/confirm?ref=${order.paymentReference}`,
       metadata: { orderId, orderNumber: order.orderNumber },

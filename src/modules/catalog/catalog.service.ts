@@ -48,11 +48,40 @@ export class CatalogService {
     const brand = await this.brandModel.findById(dto.brandId).lean();
     if (!brand) throw new NotFoundException("Brand not found");
 
-    const category = await this.categoryModel.findById(dto.categoryId).lean();
-    if (!category) throw new NotFoundException("Category not found");
+    // Resolve the primary category (always required)
+    const primaryCategory = await this.categoryModel
+      .findById(dto.categoryId)
+      .lean();
+    if (!primaryCategory) throw new NotFoundException("Category not found");
 
+    // Build the full set of category IDs: primary + any additional from categoryIds
+    const allCategoryIds = [
+      dto.categoryId,
+      ...(dto.categoryIds ?? []).filter((id) => id !== dto.categoryId),
+    ];
+
+    // Resolve every category in one batch query
+    const resolved = await this.categoryModel
+      .find({ _id: { $in: allCategoryIds } })
+      .lean();
+    if (resolved.length !== new Set(allCategoryIds).size) {
+      throw new NotFoundException("One or more categories not found");
+    }
+
+    // Preserve insertion order: primary first, then the rest in the order given
+    const categoryMap = new Map(resolved.map((c) => [c._id.toString(), c]));
+    const categories = allCategoryIds
+      .map((id) => categoryMap.get(id))
+      .filter((c): c is NonNullable<typeof c> => !!c)
+      .map((c) => ({
+        categoryId: c._id.toString(),
+        categoryName: c.name,
+        categorySlug: c.slug,
+      }));
+
+    // Subcategory belongs to the primary category
     const subcategory = dto.subcategoryId
-      ? category.subcategories?.find((s) => s.id === dto.subcategoryId)
+      ? primaryCategory.subcategories?.find((s) => s.id === dto.subcategoryId)
       : null;
 
     const slug = this.makeSlug(`${brand.name} ${dto.title} ${sku}`);
@@ -63,8 +92,9 @@ export class CatalogService {
       slug,
       brandName: brand.name,
       brandSlug: brand.slug,
-      categoryName: category.name,
-      categorySlug: category.slug,
+      categoryName: primaryCategory.name,
+      categorySlug: primaryCategory.slug,
+      categories,
       subcategoryId: subcategory?.id ?? null,
       subcategoryName: subcategory?.name ?? null,
       subcategorySlug: subcategory?.slug ?? null,
@@ -85,7 +115,26 @@ export class CatalogService {
       filter.status = query.status;
     }
 
-    if (query.categorySlug) filter.categorySlug = query.categorySlug;
+    if (query.categorySlug) {
+      // Multi-category: a product can belong to several categories.
+      // Match if the slug appears in the categories array (multi-category)
+      // OR in the legacy flat categorySlug field (backward compat for old docs).
+      const slugs = query.categorySlug
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (slugs.length === 1) {
+        filter.$or = [
+          { "categories.categorySlug": slugs[0] },
+          { categorySlug: slugs[0] },
+        ];
+      } else {
+        filter.$or = [
+          { "categories.categorySlug": { $in: slugs } },
+          { categorySlug: { $in: slugs } },
+        ];
+      }
+    }
     if (query.subcategorySlug) filter.subcategorySlug = query.subcategorySlug;
     if (query.tag) filter.tags = query.tag;
 
@@ -171,10 +220,52 @@ export class CatalogService {
     }
 
     if (dto.categoryId && dto.categoryId !== product.categoryId) {
-      const category = await this.categoryModel.findById(dto.categoryId).lean();
-      if (!category) throw new NotFoundException("Category not found");
-      (dto as Record<string, unknown>).categoryName = category.name;
-      (dto as Record<string, unknown>).categorySlug = category.slug;
+      // Primary category changed — rebuild the full categories array.
+      const allCategoryIds = [
+        dto.categoryId,
+        ...(dto.categoryIds ?? []).filter((id) => id !== dto.categoryId),
+      ];
+      const resolved = await this.categoryModel
+        .find({ _id: { $in: allCategoryIds } })
+        .lean();
+      if (resolved.length !== new Set(allCategoryIds).size) {
+        throw new NotFoundException("One or more categories not found");
+      }
+      const categoryMap = new Map(resolved.map((c) => [c._id.toString(), c]));
+      const categories = allCategoryIds
+        .map((id) => categoryMap.get(id))
+        .filter((c): c is NonNullable<typeof c> => !!c)
+        .map((c) => ({
+          categoryId: c._id.toString(),
+          categoryName: c.name,
+          categorySlug: c.slug,
+        }));
+      (dto as Record<string, unknown>).categoryName = resolved[0].name;
+      (dto as Record<string, unknown>).categorySlug = resolved[0].slug;
+      (dto as Record<string, unknown>).categories = categories;
+    } else if (dto.categoryIds && dto.categoryIds.length > 0) {
+      // Only the additional categories changed (primary stays the same).
+      const primaryId = product.categoryId;
+      const allCategoryIds = [
+        primaryId,
+        ...dto.categoryIds.filter((id) => id !== primaryId),
+      ];
+      const resolved = await this.categoryModel
+        .find({ _id: { $in: allCategoryIds } })
+        .lean();
+      if (resolved.length !== new Set(allCategoryIds).size) {
+        throw new NotFoundException("One or more categories not found");
+      }
+      const categoryMap = new Map(resolved.map((c) => [c._id.toString(), c]));
+      const categories = allCategoryIds
+        .map((id) => categoryMap.get(id))
+        .filter((c): c is NonNullable<typeof c> => !!c)
+        .map((c) => ({
+          categoryId: c._id.toString(),
+          categoryName: c.name,
+          categorySlug: c.slug,
+        }));
+      (dto as Record<string, unknown>).categories = categories;
     }
 
     const updated = await this.productModel.findByIdAndUpdate(
@@ -218,10 +309,23 @@ export class CatalogService {
   ): Promise<LeanProduct[]> {
     const product = await this.productModel.findById(productId).lean();
     if (!product) return [];
+
+    // Collect all category slugs from the multi-category array plus the
+    // legacy flat field, then find products that share any of them.
+    const slugs = new Set<string>(
+      [
+        ...(product.categories ?? []).map((c) => c.categorySlug),
+        product.categorySlug,
+      ].filter(Boolean) as string[],
+    );
+
     return this.productModel
       .find({
         _id: { $ne: productId },
-        categorySlug: product.categorySlug,
+        $or: [
+          { "categories.categorySlug": { $in: [...slugs] } },
+          { categorySlug: { $in: [...slugs] } },
+        ],
         status: "active",
       })
       .limit(limit)
@@ -331,6 +435,27 @@ export class CatalogService {
         name: d["categoryName"],
         slug: d["categorySlug"],
       },
+      categories:
+        Array.isArray(d["categories"]) && d["categories"].length > 0
+          ? (
+              d["categories"] as {
+                categoryId: string;
+                categoryName: string;
+                categorySlug: string;
+              }[]
+            ).map((c) => ({
+              id: c.categoryId,
+              name: c.categoryName,
+              slug: c.categorySlug,
+            }))
+          : [
+              // Fall back to the flat fields for products without a categories array
+              {
+                id: d["categoryId"],
+                name: d["categoryName"],
+                slug: d["categorySlug"],
+              },
+            ],
       subcategory: d["subcategoryId"]
         ? {
             id: d["subcategoryId"],

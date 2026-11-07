@@ -8,13 +8,18 @@ import { OrderDocument } from "../order/schemas/order.schema";
  * PaymentRouter — selects the correct payment gateway based on the order's
  * chargeCurrency and the requested provider hint.
  *
- * Routing table (PRD §1.10.3 and Design §7):
+ * Routing table:
  *
  *   NGN  + paystack               → PaymentService.initializePaystack()
  *   NGN  + flutterwave / any      → PaymentService.initializeFlutterwave()
- *   USD/GBP/EUR/CAD + Stripe live → StripeService.createCheckoutSession()
- *   USD/GBP/EUR/CAD + Stripe off  → PaymentService.initializeFlutterwave()  (multi-currency)
- *   any other currency             → PaymentService.initializeFlutterwave()  (multi-currency)
+ *   non-NGN + paystack            → PaymentService.initializePaystack()  (multi-currency)
+ *   non-NGN + Stripe live         → StripeService.createCheckoutSession()
+ *   non-NGN + Stripe off          → PaymentService.initializeFlutterwave() (multi-currency)
+ *   any other currency            → PaymentService.initializeFlutterwave() (multi-currency)
+ *
+ * Paystack supports multi-currency charging (USD, GBP, EUR, GHS, ZAR, KES,
+ * etc.) via its international payments feature — the `currency` field in the
+ * transaction initialisation payload is all that is needed.
  *
  * BUSINESS RULE: The webhook handler — not this router — confirms payment.
  * This method only creates a hosted checkout URL; it never marks an order paid.
@@ -49,8 +54,7 @@ export class PaymentRouter {
     provider?: "paystack" | "flutterwave" | "stripe",
   ): Promise<{ checkoutUrl: string; reference: string }> {
     const currency = order.chargeCurrency ?? "NGN";
-    const stripeEnabled =
-      this.config.get<string>("stripe.enabled") === "true";
+    const stripeEnabled = this.config.get<string>("stripe.enabled") === "true";
 
     // ── NGN orders: honour the provider hint ──────────────────────────────
     if (currency === "NGN") {
@@ -61,15 +65,21 @@ export class PaymentRouter {
       return this.paymentService.initializeFlutterwave(order);
     }
 
-    // ── Non-NGN orders: route by currency ─────────────────────────────────
+    // ── Non-NGN orders ─────────────────────────────────────────────────────
+    // Paystack handles multi-currency natively — honour the hint directly.
+    if (provider === "paystack") {
+      this.logger.log(
+        `Routing ${order.orderNumber} (${currency}) to Paystack multi-currency`,
+      );
+      return this.paymentService.initializePaystack(order);
+    }
+
     if (PaymentRouter.STRIPE_CURRENCIES.has(currency)) {
       if (stripeEnabled) {
-        this.logger.log(
-          `Routing ${order.orderNumber} (${currency}) to Stripe`,
-        );
+        this.logger.log(`Routing ${order.orderNumber} (${currency}) to Stripe`);
         return this.stripeService.createCheckoutSession(order);
       }
-      // Stripe not yet live — use Flutterwave multi-currency as fallback
+      // Stripe not yet live — fall back to Flutterwave multi-currency
       this.logger.log(
         `Stripe disabled — routing ${order.orderNumber} (${currency}) to Flutterwave multi-currency`,
       );

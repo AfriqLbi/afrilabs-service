@@ -1,11 +1,12 @@
 /**
  * PaymentRouter — Unit Tests
  *
- * Covers all 5 routing branches (Design Property 4):
+ * Covers all routing branches (Design Property 4):
  *   NGN + paystack           → PaymentService.initializePaystack()
  *   NGN + flutterwave        → PaymentService.initializeFlutterwave()
- *   USD + Stripe enabled     → StripeService.createCheckoutSession()
- *   USD + Stripe disabled    → PaymentService.initializeFlutterwave()
+ *   non-NGN + paystack        → PaymentService.initializePaystack()  (multi-currency)
+ *   non-NGN + Stripe enabled  → StripeService.createCheckoutSession()
+ *   non-NGN + Stripe disabled → PaymentService.initializeFlutterwave() (multi-currency)
  *   GHS (other currency)     → PaymentService.initializeFlutterwave()
  *
  * Property 4: PaymentRouter always returns { checkoutUrl, reference }
@@ -19,22 +20,31 @@ import { Types } from "mongoose";
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
 const CHECKOUT_URL = "https://checkout.example.com/pay";
-const REFERENCE    = "AV-2601-ABCDEF";
+const REFERENCE = "AV-2601-ABCDEF";
 
 const mockPaymentService = {
-  initializePaystack:    jest.fn().mockResolvedValue({ checkoutUrl: CHECKOUT_URL, reference: REFERENCE }),
-  initializeFlutterwave: jest.fn().mockResolvedValue({ checkoutUrl: CHECKOUT_URL, reference: REFERENCE }),
+  initializePaystack: jest
+    .fn()
+    .mockResolvedValue({ checkoutUrl: CHECKOUT_URL, reference: REFERENCE }),
+  initializeFlutterwave: jest
+    .fn()
+    .mockResolvedValue({ checkoutUrl: CHECKOUT_URL, reference: REFERENCE }),
 };
 
 const mockStripeService = {
-  createCheckoutSession: jest.fn().mockResolvedValue({ checkoutUrl: CHECKOUT_URL, reference: REFERENCE }),
+  createCheckoutSession: jest
+    .fn()
+    .mockResolvedValue({ checkoutUrl: CHECKOUT_URL, reference: REFERENCE }),
 };
 
 function mockConfig(stripeEnabled: string) {
   return { get: jest.fn().mockReturnValue(stripeEnabled) };
 }
 
-function makeOrder(chargeCurrency: string, provider: string = "paystack"): OrderDocument {
+function makeOrder(
+  chargeCurrency: string,
+  provider: string = "paystack",
+): OrderDocument {
   return {
     _id: new Types.ObjectId(),
     chargeCurrency,
@@ -63,7 +73,7 @@ describe("PaymentRouter.initializePayment() — all branches (Design Property 4)
 
   it("routes NGN + paystack → initializePaystack()", async () => {
     const router = buildRouter(false);
-    const order  = makeOrder("NGN", "paystack");
+    const order = makeOrder("NGN", "paystack");
 
     const result = await router.initializePayment(order, "paystack");
 
@@ -77,11 +87,13 @@ describe("PaymentRouter.initializePayment() — all branches (Design Property 4)
 
   it("routes NGN + flutterwave → initializeFlutterwave()", async () => {
     const router = buildRouter(false);
-    const order  = makeOrder("NGN", "flutterwave");
+    const order = makeOrder("NGN", "flutterwave");
 
     const result = await router.initializePayment(order, "flutterwave");
 
-    expect(mockPaymentService.initializeFlutterwave).toHaveBeenCalledWith(order);
+    expect(mockPaymentService.initializeFlutterwave).toHaveBeenCalledWith(
+      order,
+    );
     expect(mockPaymentService.initializePaystack).not.toHaveBeenCalled();
     expect(result).toEqual({ checkoutUrl: CHECKOUT_URL, reference: REFERENCE });
   });
@@ -90,7 +102,7 @@ describe("PaymentRouter.initializePayment() — all branches (Design Property 4)
 
   it("routes USD + STRIPE_ENABLED=true → StripeService.createCheckoutSession()", async () => {
     const router = buildRouter(true);
-    const order  = makeOrder("USD", "stripe");
+    const order = makeOrder("USD", "stripe");
 
     const result = await router.initializePayment(order, "stripe");
 
@@ -102,7 +114,7 @@ describe("PaymentRouter.initializePayment() — all branches (Design Property 4)
 
   it("also routes GBP + STRIPE_ENABLED=true → Stripe", async () => {
     const router = buildRouter(true);
-    const order  = makeOrder("GBP", "stripe");
+    const order = makeOrder("GBP", "stripe");
 
     await router.initializePayment(order, "stripe");
 
@@ -111,7 +123,7 @@ describe("PaymentRouter.initializePayment() — all branches (Design Property 4)
 
   it("also routes EUR + STRIPE_ENABLED=true → Stripe", async () => {
     const router = buildRouter(true);
-    const order  = makeOrder("EUR", "stripe");
+    const order = makeOrder("EUR", "stripe");
 
     await router.initializePayment(order, "stripe");
 
@@ -122,11 +134,13 @@ describe("PaymentRouter.initializePayment() — all branches (Design Property 4)
 
   it("routes USD + STRIPE_ENABLED=false → initializeFlutterwave() as fallback", async () => {
     const router = buildRouter(false);
-    const order  = makeOrder("USD");
+    const order = makeOrder("USD");
 
     const result = await router.initializePayment(order, "flutterwave");
 
-    expect(mockPaymentService.initializeFlutterwave).toHaveBeenCalledWith(order);
+    expect(mockPaymentService.initializeFlutterwave).toHaveBeenCalledWith(
+      order,
+    );
     expect(mockStripeService.createCheckoutSession).not.toHaveBeenCalled();
     expect(result).toEqual({ checkoutUrl: CHECKOUT_URL, reference: REFERENCE });
   });
@@ -135,36 +149,73 @@ describe("PaymentRouter.initializePayment() — all branches (Design Property 4)
 
   it("routes GHS (other currency) → initializeFlutterwave() regardless of Stripe flag", async () => {
     const router = buildRouter(true); // Stripe enabled but GHS not in Stripe currencies
-    const order  = makeOrder("GHS");
+    const order = makeOrder("GHS");
 
     const result = await router.initializePayment(order, "flutterwave");
 
-    expect(mockPaymentService.initializeFlutterwave).toHaveBeenCalledWith(order);
+    expect(mockPaymentService.initializeFlutterwave).toHaveBeenCalledWith(
+      order,
+    );
     expect(mockStripeService.createCheckoutSession).not.toHaveBeenCalled();
     expect(result).toEqual({ checkoutUrl: CHECKOUT_URL, reference: REFERENCE });
   });
 
   it("routes KES → initializeFlutterwave()", async () => {
     const router = buildRouter(false);
-    const order  = makeOrder("KES");
+    const order = makeOrder("KES");
     await router.initializePayment(order);
-    expect(mockPaymentService.initializeFlutterwave).toHaveBeenCalledWith(order);
+    expect(mockPaymentService.initializeFlutterwave).toHaveBeenCalledWith(
+      order,
+    );
+  });
+
+  // ── Branch 6: Non-NGN + paystack → Paystack multi-currency ────────────────
+
+  it("routes USD + paystack → initializePaystack() (multi-currency)", async () => {
+    const router = buildRouter(true);
+    const order = makeOrder("USD", "paystack");
+
+    const result = await router.initializePayment(order, "paystack");
+
+    expect(mockPaymentService.initializePaystack).toHaveBeenCalledWith(order);
+    expect(mockStripeService.createCheckoutSession).not.toHaveBeenCalled();
+    expect(mockPaymentService.initializeFlutterwave).not.toHaveBeenCalled();
+    expect(result).toEqual({ checkoutUrl: CHECKOUT_URL, reference: REFERENCE });
+  });
+
+  it("routes GBP + paystack → initializePaystack() even when Stripe is enabled", async () => {
+    const router = buildRouter(true);
+    const order = makeOrder("GBP", "paystack");
+
+    await router.initializePayment(order, "paystack");
+
+    expect(mockPaymentService.initializePaystack).toHaveBeenCalledWith(order);
+    expect(mockStripeService.createCheckoutSession).not.toHaveBeenCalled();
   });
 
   // ── Property 4: always returns { checkoutUrl, reference } ─────────────────
 
   it("(Property 4) always returns a non-empty checkoutUrl for any valid order", async () => {
     const currencies = ["NGN", "USD", "GBP", "EUR", "GHS", "KES", "ZAR"];
-    const router     = buildRouter(true);
+    const router = buildRouter(true);
 
     for (const currency of currencies) {
       jest.clearAllMocks();
-      mockPaymentService.initializePaystack.mockResolvedValue({ checkoutUrl: CHECKOUT_URL, reference: REFERENCE });
-      mockPaymentService.initializeFlutterwave.mockResolvedValue({ checkoutUrl: CHECKOUT_URL, reference: REFERENCE });
-      mockStripeService.createCheckoutSession.mockResolvedValue({ checkoutUrl: CHECKOUT_URL, reference: REFERENCE });
+      mockPaymentService.initializePaystack.mockResolvedValue({
+        checkoutUrl: CHECKOUT_URL,
+        reference: REFERENCE,
+      });
+      mockPaymentService.initializeFlutterwave.mockResolvedValue({
+        checkoutUrl: CHECKOUT_URL,
+        reference: REFERENCE,
+      });
+      mockStripeService.createCheckoutSession.mockResolvedValue({
+        checkoutUrl: CHECKOUT_URL,
+        reference: REFERENCE,
+      });
 
-      const order  = makeOrder(currency);
-      const result = await router.initializePayment(order, currency === "NGN" ? "paystack" : "stripe");
+      const order = makeOrder(currency);
+      const result = await router.initializePayment(order, "paystack");
 
       expect(result.checkoutUrl).toBeTruthy();
       expect(typeof result.checkoutUrl).toBe("string");
@@ -176,9 +227,13 @@ describe("PaymentRouter.initializePayment() — all branches (Design Property 4)
 
   it("propagates gateway errors without swallowing them", async () => {
     const router = buildRouter(false);
-    const order  = makeOrder("NGN", "paystack");
-    mockPaymentService.initializePaystack.mockRejectedValue(new Error("Paystack is down"));
+    const order = makeOrder("NGN", "paystack");
+    mockPaymentService.initializePaystack.mockRejectedValue(
+      new Error("Paystack is down"),
+    );
 
-    await expect(router.initializePayment(order, "paystack")).rejects.toThrow("Paystack is down");
+    await expect(router.initializePayment(order, "paystack")).rejects.toThrow(
+      "Paystack is down",
+    );
   });
 });

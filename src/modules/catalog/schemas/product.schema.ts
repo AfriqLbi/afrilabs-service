@@ -36,6 +36,22 @@ export class Product {
   @Prop({ required: true })
   categorySlug!: string;
 
+  /**
+   * Multi-category support — a product can belong to multiple categories
+   * (e.g. "cargopants" AND "men"). The first element is always the primary
+   * category, mirrored to categoryId/categoryName/categorySlug above for
+   * backward compatibility with existing queries and indexes.
+   */
+  @Prop({
+    type: [{ categoryId: String, categoryName: String, categorySlug: String }],
+    default: [],
+  })
+  categories!: {
+    categoryId: string;
+    categoryName: string;
+    categorySlug: string;
+  }[];
+
   @Prop({ type: String, default: null })
   subcategoryId!: string | null;
 
@@ -118,6 +134,7 @@ export const ProductSchema = SchemaFactory.createForClass(Product);
 // sku and slug: unique indexes already created by unique: true in @Prop
 // Compound and non-unique indexes that @Prop can't express:
 ProductSchema.index({ categorySlug: 1, status: 1 });
+ProductSchema.index({ "categories.categorySlug": 1, status: 1 });
 ProductSchema.index({ subcategorySlug: 1, status: 1 });
 ProductSchema.index({ brandSlug: 1, status: 1 });
 ProductSchema.index({ tags: 1, status: 1 });

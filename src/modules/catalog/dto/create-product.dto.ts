@@ -63,11 +63,24 @@ export class CreateProductDto {
 
   @ApiProperty({
     example: "64a1f2c8e3b7a900120d4321",
-    description: "Category ObjectId",
+    description: "Primary category ObjectId",
   })
   @IsString()
   @IsNotEmpty()
   categoryId: string;
+
+  @ApiPropertyOptional({
+    type: [String],
+    example: ["64a1f2c8e3b7a900120d4321", "64a1f2c8e3b7a900120d9999"],
+    description:
+      "Additional category ObjectIds. The product will appear in all listed categories. " +
+      "The primary categoryId above is always included as the first element. " +
+      "If omitted, the product belongs to only the primary category.",
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  categoryIds?: string[];
 
   @ApiPropertyOptional({
     example: "s2",
