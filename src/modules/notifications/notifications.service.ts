@@ -685,7 +685,7 @@ export class NotificationsService {
       return;
     }
 
-    const quotesUrl = `${this.storefrontUrl}/admin/shipping`;
+    const quotesUrl = `${this.storefrontUrl}/admin/shipping?tab=quotes`;
 
     const body = `
       ${heading("Shipping quote needed")}
@@ -730,7 +730,7 @@ export class NotificationsService {
       .filter(Boolean);
     if (!adminEmails.length) return;
 
-    const quotesUrl = `${this.storefrontUrl}/admin/shipping`;
+    const quotesUrl = `${this.storefrontUrl}/admin/shipping?tab=quotes`;
     const requestedAt = order.shippingQuote?.requestedAt
       ? new Date(order.shippingQuote.requestedAt).toLocaleString("en-NG", {
           dateStyle: "medium",
