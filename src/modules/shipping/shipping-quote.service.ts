@@ -152,6 +152,13 @@ export class ShippingQuoteService {
             ? dto.amount / (fxRate * (1 + fxBuffer / 100))
             : dto.amount;
 
+        // Also update order.total (subtotal - discount + shippingFee) so the
+        // admin panel and analytics always show the correct inclusive total.
+        const newTotal =
+          (order.subtotal ?? 0) -
+          (order.discountAmount ?? 0) +
+          shippingFeeNgnNaira;
+
         updated = (await this.orderModel.findByIdAndUpdate(
           orderId,
           {
@@ -159,6 +166,7 @@ export class ShippingQuoteService {
             shippingStatus: "QUOTED",
             shippingFee: shippingFeeNgnNaira, // NGN naira — same unit as createOrder's rate-card path
             shippingFeeSource: "admin_quote",
+            total: newTotal, // ← keep total in sync with the new shipping fee
             chargeTotal: newChargeTotal,
             reservationExpiresAt: validUntil,
             shippingQuote: {

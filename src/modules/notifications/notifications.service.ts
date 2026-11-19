@@ -770,12 +770,13 @@ export class NotificationsService {
     const orderUrl = this.orderUrl(order);
     const quote = order.shippingQuote;
     const currency = order.chargeCurrency ?? "NGN";
+    const displayCurrency = (order as unknown as Record<string, unknown>)
+      .displayCurrency as string | null;
     const isMulti = currency !== "NGN" && order.chargeTotal != null;
+    const hasDisplayMismatch =
+      !!displayCurrency && displayCurrency !== currency;
 
     // ── Fee display ──────────────────────────────────────────────────────────
-    // order.shippingFee is stored as back-converted NGN naira — NOT in
-    // chargeCurrency minor units.  The authoritative chargeCurrency figure is
-    // order.shippingQuote.amount (what the admin typed, in minor units).
     const feeDisplay = isMulti
       ? new Intl.NumberFormat("en-US", {
           style: "currency",
@@ -785,9 +786,6 @@ export class NotificationsService {
       : fmtNGN(order.shippingFee ?? 0);
 
     // ── Items subtotal display ───────────────────────────────────────────────
-    // Multi-currency: chargeTotal already includes the shipping amount; subtract
-    // it back to get the items-only figure.  Both are in chargeCurrency minor units.
-    // NGN: order.total is naira, shippingFee is naira.
     const itemsDisplay = isMulti
       ? new Intl.NumberFormat("en-US", {
           style: "currency",
@@ -799,6 +797,20 @@ export class NotificationsService {
       : fmtNGN(Math.max(0, (order.total ?? 0) - (order.shippingFee ?? 0)));
 
     const totalDisplay = fmtOrderTotal(order);
+
+    // If the customer browsed in a currency we can't yet charge (e.g. GBP)
+    // but the order was processed in NGN/USD, show a note so they understand.
+    const displayMismatchNote = hasDisplayMismatch
+      ? `<p style="margin:12px 0 0;padding:10px 12px;background:#1a1a1a;border-left:2px solid #FED700;
+                   font-size:12px;color:#aaa;line-height:1.6;font-family:'DM Sans',Arial,sans-serif;">
+           Your order is priced in <strong style="color:#e8e8e8;">${currency}</strong>.
+           ${
+             currency === "NGN"
+               ? `The amounts above are in Nigerian Naira (₦). International card payments are accepted — your bank will convert at their current exchange rate.`
+               : `You browsed in ${displayCurrency}, but this order will be charged in ${currency}.`
+           }
+         </p>`
+      : "";
 
     const validUntilDisplay = quote?.validUntil
       ? new Date(quote.validUntil).toLocaleDateString("en-NG", {
@@ -862,6 +874,7 @@ export class NotificationsService {
       )}
 
       ${goldBtn(orderUrl, "Pay Now")}
+      ${displayMismatchNote}
       <p style="font-size:12px;color:#555;margin-top:12px;font-family:'DM Sans',Arial,sans-serif;">
         This quote expires on <strong style="color:#888;">${validUntilDisplay}</strong>.
       </p>

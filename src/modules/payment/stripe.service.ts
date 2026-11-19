@@ -182,7 +182,7 @@ export class StripeService {
                   `Currency mismatch: expected ${expectedCurrency}, got ${actualCurrency}`,
                 );
               } else {
-                await this.orderService.markPaid(orderId, eventId);
+                await this.orderService.markPaid(orderId, eventId, "stripe");
                 for (const item of order.items) {
                   await this.inventoryService.commitReservedStock(
                     item.productId,

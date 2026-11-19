@@ -244,6 +244,17 @@ export class Order {
   chargeCurrency!: string;
 
   /**
+   * The currency the customer originally selected / browsed in (e.g. "GBP").
+   * May differ from chargeCurrency if the requested currency was remapped to
+   * a supported gateway currency (e.g. GBP → USD while Stripe is pending).
+   * Stored purely for display — admin quote queue shows this so staff know
+   * the customer's location and can quote the correct amount.
+   * Falls back to chargeCurrency when no remapping occurred.
+   */
+  @Prop({ type: String, default: null })
+  displayCurrency!: string | null;
+
+  /**
    * Timestamp when the price lock expires (order creation + 30 min).
    * A BullMQ delayed job releases stock if the order is still pending_payment
    * when this timestamp is reached.

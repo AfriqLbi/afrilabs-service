@@ -274,6 +274,12 @@ export class OrderService {
               currency: finalChargeCurrency,
               // Multi-currency fields
               chargeCurrency: finalChargeCurrency,
+              // Remember the customer's original display currency (may differ
+              // from chargeCurrency when it was remapped, e.g. GBP → USD)
+              displayCurrency:
+                requestedCurrency !== finalChargeCurrency
+                  ? requestedCurrency
+                  : null,
               ngnTotal,
               chargeTotal,
               fxRate,
@@ -536,17 +542,23 @@ export class OrderService {
   async markPaid(
     orderId: string,
     webhookId: string,
+    provider?: "paystack" | "flutterwave" | "stripe",
     session?: unknown,
   ): Promise<OrderDocument> {
-    const order = await this.orderModel.findByIdAndUpdate(
-      orderId,
-      {
-        status: "paid",
-        paidAt: new Date(),
-        processedWebhookId: webhookId,
-      },
-      { new: true },
-    );
+    const updateDoc: Record<string, unknown> = {
+      status: "paid",
+      paidAt: new Date(),
+      processedWebhookId: webhookId,
+    };
+    // Persist the gateway that actually processed the payment.
+    // This overrides the provider selected at checkout (which may differ —
+    // e.g. customer chose flutterwave but the payment link was for paystack).
+    if (provider) {
+      updateDoc.paymentProvider = provider;
+    }
+    const order = await this.orderModel.findByIdAndUpdate(orderId, updateDoc, {
+      new: true,
+    });
     if (!order) throw new NotFoundException("Order not found");
 
     // Cancel the price-lock expiry job â€” it's no longer needed

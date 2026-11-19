@@ -231,6 +231,7 @@ export class PaymentService {
             await this.orderService.markPaid(
               (order._id as unknown as Types.ObjectId).toString(),
               eventId,
+              "paystack",
             );
             for (const item of order.items) {
               await this.inventoryService.commitReservedStock(
@@ -358,6 +359,7 @@ export class PaymentService {
           await this.orderService.markPaid(
             (order._id as unknown as Types.ObjectId).toString(),
             eventId,
+            "flutterwave",
           );
           for (const item of order.items) {
             await this.inventoryService.commitReservedStock(
