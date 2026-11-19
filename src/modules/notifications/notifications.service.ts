@@ -156,7 +156,7 @@ function labiShell(content: string, storefrontUrl: string): string {
           <!-- Header -->
           <tr>
             <td class="labi-bg-card"
-                style="padding:32px 40px 24px;border-bottom:1px solid #222222;
+                style="padding:32px 20px 24px;border-bottom:1px solid #222222;
                        text-align:center;background-color:#111111;">
               <a href="${storefrontUrl}" style="text-decoration:none;">
                 <img src="${LOGO_URL}" alt="LABI" width="52" height="52"
@@ -176,7 +176,7 @@ function labiShell(content: string, storefrontUrl: string): string {
           <!-- Body -->
           <tr>
             <td class="labi-bg-card"
-                style="padding:36px 40px;background-color:#111111;">
+                style="padding:36px 20px;background-color:#111111;">
               ${content}
             </td>
           </tr>
@@ -184,7 +184,7 @@ function labiShell(content: string, storefrontUrl: string): string {
           <!-- Footer -->
           <tr>
             <td class="labi-bg-card"
-                style="padding:24px 40px;border-top:1px solid #222222;
+                style="padding:24px 20px;border-top:1px solid #222222;
                        text-align:center;background-color:#111111;">
               <p class="labi-text-dim"
                  style="margin:0 0 6px;font-size:11px;color:#555555;
@@ -258,7 +258,7 @@ function infoBox(rows: string, borderColor = "#2a2a2a"): string {
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"
            class="labi-bg-box"
            style="background-color:#191919;border:1px solid ${borderColor};margin:20px 0;">
-    <tr><td style="padding:20px 24px;">${rows}</td></tr>
+    <tr><td style="padding:20px 12px;">${rows}</td></tr>
   </table>`;
 }
 
