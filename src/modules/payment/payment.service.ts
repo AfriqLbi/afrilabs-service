@@ -282,18 +282,27 @@ export class PaymentService {
     rawBody: Buffer,
     signature: string,
   ): Promise<void> {
-    const secret = this.config.get<string>("flutterwave.secretKey")!;
-    const expected = crypto
-      .createHmac("sha256", secret)
-      .update(rawBody)
-      .digest("hex");
+    // Flutterwave uses a plain "Secret Hash" — a string you define in the
+    // dashboard and they send verbatim in the `verif-hash` header.
+    // This is NOT an HMAC; we just compare strings in constant time to
+    // avoid timing attacks.
+    const secretHash = this.config.get<string>("flutterwave.webhookSecret")!;
 
-    if (
-      !crypto.timingSafeEqual(
-        Buffer.from(expected, "hex"),
-        Buffer.from(signature ?? "", "hex"),
-      )
-    ) {
+    if (!secretHash) {
+      this.logger.error("FLUTTERWAVE_WEBHOOK_SECRET is not configured");
+      throw new UnauthorizedException("Webhook secret not configured");
+    }
+
+    const incomingBuf = Buffer.from(signature ?? "");
+    const expectedBuf = Buffer.from(secretHash);
+
+    const lengthsMatch = incomingBuf.length === expectedBuf.length;
+    // Always run timingSafeEqual with same-length buffers to avoid RangeError;
+    // if lengths differ, we already know it's invalid.
+    const signaturesMatch =
+      lengthsMatch && crypto.timingSafeEqual(incomingBuf, expectedBuf);
+
+    if (!signaturesMatch) {
       throw new UnauthorizedException("Invalid Flutterwave webhook signature");
     }
 

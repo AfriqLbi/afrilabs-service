@@ -12,12 +12,14 @@ import { AuditLogModule } from "../audit-log/audit-log.module";
 import { OrderService } from "./order.service";
 import { OrderController, AdminOrderController } from "./order.controller";
 import { QUEUE_RESERVATION_EXPIRY } from "../jobs/jobs.constants";
+import { FxRate, FxRateSchema } from "../geo-currency/schemas/fx-rate.schema";
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: Order.name, schema: OrderSchema },
       { name: Cart.name, schema: CartSchema },
+      { name: FxRate.name, schema: FxRateSchema },
     ]),
     BullModule.registerQueue({ name: QUEUE_RESERVATION_EXPIRY }),
     InventoryModule,

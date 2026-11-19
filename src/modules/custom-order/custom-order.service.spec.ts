@@ -96,11 +96,16 @@ const mockNotificationsService = {
   sendCustomOrderConfirmation: jest.fn().mockResolvedValue(undefined),
 };
 
+const mockProductionTrackingService = {
+  updateStage: jest.fn().mockResolvedValue({}),
+};
+
 function buildService(): CustomOrderService {
   return new CustomOrderService(
     mockCustomOrderModel as any,
     mockMeasurementService as any,
     mockNotificationsService as any,
+    mockProductionTrackingService as any,
     mockConfigService as any,
   );
 }

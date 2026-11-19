@@ -50,13 +50,14 @@ const mockCustomOrderService = {
 };
 
 const PAYSTACK_SECRET = "test-paystack-webhook-secret";
-const FLUTTERWAVE_SECRET = "test-flutterwave-secret-key";
+const FLUTTERWAVE_SECRET_HASH = "my-flutterwave-secret-hash";
 
 const mockConfigService = {
   get: jest.fn((key: string) => {
     const map: Record<string, string> = {
       "paystack.webhookSecret": PAYSTACK_SECRET,
-      "flutterwave.secretKey": FLUTTERWAVE_SECRET,
+      // Flutterwave now uses a plain Secret Hash, not the secret key
+      "flutterwave.webhookSecret": FLUTTERWAVE_SECRET_HASH,
     };
     return map[key] ?? "";
   }),
@@ -106,11 +107,9 @@ function buildFlutterwaveBody(
   );
 }
 
-function validFlutterSig(body: Buffer): string {
-  return crypto
-    .createHmac("sha256", FLUTTERWAVE_SECRET)
-    .update(body)
-    .digest("hex");
+function validFlutterSig(): string {
+  // Flutterwave's verif-hash header is the plain Secret Hash string verbatim
+  return FLUTTERWAVE_SECRET_HASH;
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -247,7 +246,7 @@ describe("PaymentService — Webhook signature verification (BR-1)", () => {
         "AV-2602-LWMN4Q",
         "successful",
       );
-      const sig = validFlutterSig(body);
+      const sig = validFlutterSig();
 
       await service.handleFlutterwaveWebhook(body, sig);
 
@@ -260,7 +259,8 @@ describe("PaymentService — Webhook signature verification (BR-1)", () => {
         "AV-2602-LWMN4Q",
         "successful",
       );
-      const badSig = "invalid-signature";
+      // Any string that is not the secret hash
+      const badSig = "wrong-secret-hash";
 
       await expect(
         service.handleFlutterwaveWebhook(body, badSig),
@@ -273,7 +273,7 @@ describe("PaymentService — Webhook signature verification (BR-1)", () => {
         "AV-2602-LWMN4Q",
         "successful",
       );
-      const badSig = "bad-sig";
+      const badSig = "completely-wrong-hash";
 
       await expect(
         service.handleFlutterwaveWebhook(body, badSig),
@@ -293,7 +293,7 @@ describe("PaymentService — Webhook signature verification (BR-1)", () => {
         "AV-FW-REF",
         "successful",
       );
-      const sig = validFlutterSig(body);
+      const sig = validFlutterSig();
 
       await service.handleFlutterwaveWebhook(body, sig);
 
@@ -317,7 +317,7 @@ describe("PaymentService — Webhook signature verification (BR-1)", () => {
         "AV-FW-DUP",
         "successful",
       );
-      const sig = validFlutterSig(body);
+      const sig = validFlutterSig();
 
       await service.handleFlutterwaveWebhook(body, sig);
 
@@ -336,7 +336,7 @@ describe("PaymentService — Webhook signature verification (BR-1)", () => {
         "CO-1003-FW-PAY",
         "successful",
       );
-      const sig = validFlutterSig(body);
+      const sig = validFlutterSig();
 
       await service.handleFlutterwaveWebhook(body, sig);
 

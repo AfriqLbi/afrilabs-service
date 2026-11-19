@@ -38,6 +38,12 @@ export default () => ({
   flutterwave: {
     secretKey: process.env.FLUTTERWAVE_SECRET_KEY ?? "",
     encryptionKey: process.env.FLUTTERWAVE_ENCRYPTION_KEY ?? "",
+    /**
+     * Secret Hash — a plain string you define in the Flutterwave dashboard
+     * under "Webhooks → Secret Hash". Flutterwave sends it verbatim in the
+     * `verif-hash` header with every webhook call. NOT an HMAC key.
+     */
+    webhookSecret: process.env.FLUTTERWAVE_WEBHOOK_SECRET ?? "",
     baseUrl: "https://api.flutterwave.com/v3",
   },
 
@@ -78,6 +84,31 @@ export default () => ({
     supportMessage:
       process.env.WHATSAPP_SUPPORT_MESSAGE ??
       "Hi, I need help with my Labi order.",
+  },
+
+  /**
+   * Charge currencies — the ISO 4217 codes that are actually accepted by
+   * the live payment gateways right now.
+   *
+   * CHARGE_CURRENCIES: comma-separated, e.g. "NGN,USD"
+   *   - NGN + USD = Paystack (current default — NG business approval only)
+   *   - Add GBP,EUR,CAD when Stripe or Flutterwave goes live
+   *   - Add GHS,KES,ZAR when Flutterwave multi-currency is approved
+   *
+   * Any customer currency NOT in this list falls back to CHARGE_FALLBACK_CURRENCY.
+   * CHARGE_FALLBACK_CURRENCY defaults to "USD" (closest universal alternative to NGN).
+   *
+   * Prices are always displayed in the customer's local currency — only the
+   * actual gateway charge currency changes.
+   */
+  payment: {
+    chargeCurrencies: (process.env.CHARGE_CURRENCIES ?? "NGN,USD")
+      .split(",")
+      .map((c) => c.trim().toUpperCase())
+      .filter(Boolean),
+    chargeFallbackCurrency: (
+      process.env.CHARGE_FALLBACK_CURRENCY ?? "USD"
+    ).toUpperCase(),
   },
 
   /**

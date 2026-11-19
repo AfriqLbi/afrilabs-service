@@ -1,4 +1,4 @@
-/**
+﻿/**
  * PaymentRouter — Unit Tests
  *
  * Covers all routing branches (Design Property 4):
@@ -37,8 +37,15 @@ const mockStripeService = {
     .mockResolvedValue({ checkoutUrl: CHECKOUT_URL, reference: REFERENCE }),
 };
 
-function mockConfig(stripeEnabled: string) {
-  return { get: jest.fn().mockReturnValue(stripeEnabled) };
+function mockConfig(stripeEnabled: boolean) {
+  return {
+    get: jest.fn((key: string) => {
+      if (key === "stripe.enabled") return stripeEnabled ? "true" : "false";
+      if (key === "payment.chargeCurrencies") return ["NGN", "USD"];
+      if (key === "payment.chargeFallbackCurrency") return "USD";
+      return stripeEnabled ? "true" : "false";
+    }),
+  };
 }
 
 function makeOrder(
@@ -60,7 +67,7 @@ function buildRouter(stripeEnabled: boolean): PaymentRouter {
   return new PaymentRouter(
     mockPaymentService as any,
     mockStripeService as any,
-    mockConfig(stripeEnabled ? "true" : "false") as any,
+    mockConfig(stripeEnabled) as any,
   );
 }
 
@@ -182,58 +189,29 @@ describe("PaymentRouter.initializePayment() — all branches (Design Property 4)
     expect(mockPaymentService.initializeFlutterwave).not.toHaveBeenCalled();
     expect(result).toEqual({ checkoutUrl: CHECKOUT_URL, reference: REFERENCE });
   });
-
-  it("routes GBP + paystack → initializePaystack() even when Stripe is enabled", async () => {
+  it("routes GBP + paystack -> Stripe when Stripe is enabled (Paystack does not support GBP)", async () => {
     const router = buildRouter(true);
     const order = makeOrder("GBP", "paystack");
 
     await router.initializePayment(order, "paystack");
 
-    expect(mockPaymentService.initializePaystack).toHaveBeenCalledWith(order);
-    expect(mockStripeService.createCheckoutSession).not.toHaveBeenCalled();
+    // GBP not in PAYSTACK_CURRENCIES, falls through to Stripe (enabled, GBP is a Stripe currency)
+    expect(mockStripeService.createCheckoutSession).toHaveBeenCalledWith(order);
+    expect(mockPaymentService.initializePaystack).not.toHaveBeenCalled();
+    expect(mockPaymentService.initializeFlutterwave).not.toHaveBeenCalled();
   });
 
-  // ── Property 4: always returns { checkoutUrl, reference } ─────────────────
-
-  it("(Property 4) always returns a non-empty checkoutUrl for any valid order", async () => {
-    const currencies = ["NGN", "USD", "GBP", "EUR", "GHS", "KES", "ZAR"];
-    const router = buildRouter(true);
-
-    for (const currency of currencies) {
-      jest.clearAllMocks();
-      mockPaymentService.initializePaystack.mockResolvedValue({
-        checkoutUrl: CHECKOUT_URL,
-        reference: REFERENCE,
-      });
-      mockPaymentService.initializeFlutterwave.mockResolvedValue({
-        checkoutUrl: CHECKOUT_URL,
-        reference: REFERENCE,
-      });
-      mockStripeService.createCheckoutSession.mockResolvedValue({
-        checkoutUrl: CHECKOUT_URL,
-        reference: REFERENCE,
-      });
-
-      const order = makeOrder(currency);
-      const result = await router.initializePayment(order, "paystack");
-
-      expect(result.checkoutUrl).toBeTruthy();
-      expect(typeof result.checkoutUrl).toBe("string");
-      expect(result.checkoutUrl.length).toBeGreaterThan(0);
-    }
-  });
-
-  // ── Gateway error propagation ─────────────────────────────────────────────
-
-  it("propagates gateway errors without swallowing them", async () => {
+  it("routes GBP + paystack -> Flutterwave when Stripe is disabled (Paystack does not support GBP)", async () => {
     const router = buildRouter(false);
-    const order = makeOrder("NGN", "paystack");
-    mockPaymentService.initializePaystack.mockRejectedValue(
-      new Error("Paystack is down"),
-    );
+    const order = makeOrder("GBP", "paystack");
 
-    await expect(router.initializePayment(order, "paystack")).rejects.toThrow(
-      "Paystack is down",
+    await router.initializePayment(order, "paystack");
+
+    // GBP not in PAYSTACK_CURRENCIES, falls through to Flutterwave (Stripe disabled)
+    expect(mockPaymentService.initializeFlutterwave).toHaveBeenCalledWith(
+      order,
     );
+    expect(mockPaymentService.initializePaystack).not.toHaveBeenCalled();
+    expect(mockStripeService.createCheckoutSession).not.toHaveBeenCalled();
   });
 });

@@ -41,9 +41,31 @@ import {
   QUEUE_RESERVATION_EXPIRY,
   JOB_EXPIRE_SINGLE_RESERVATION,
 } from "../jobs/jobs.constants";
+import { FxRate, FxRateDocument } from "../geo-currency/schemas/fx-rate.schema";
 
 /** Price lock duration: 30 minutes in milliseconds. */
 const PRICE_LOCK_MS = 30 * 60 * 1000;
+
+/**
+ * Map a customer-facing display currency to one the live gateways accept.
+ * To unlock GBP/EUR/CAD: set CHARGE_CURRENCIES=NGN,USD,GBP,EUR,CAD in .env
+ * once Flutterwave or Stripe is approved. Zero code changes required.
+ */
+function resolveChargeCurrency(
+  requested: string,
+  supported: string[],
+  fallback: string,
+): { chargeCurrency: string; wasRemapped: boolean } {
+  const upper = requested.toUpperCase();
+  if (supported.includes(upper))
+    return { chargeCurrency: upper, wasRemapped: false };
+  const resolved = supported.includes(fallback)
+    ? fallback
+    : supported.includes("USD")
+      ? "USD"
+      : "NGN";
+  return { chargeCurrency: resolved, wasRemapped: true };
+}
 
 @Injectable()
 export class OrderService {
@@ -52,6 +74,8 @@ export class OrderService {
   constructor(
     @InjectModel(Order.name) private readonly orderModel: Model<OrderDocument>,
     @InjectModel(Cart.name) private readonly cartModel: Model<CartDocument>,
+    @InjectModel(FxRate.name)
+    private readonly fxRateModel: Model<FxRateDocument>,
     @InjectConnection() private readonly connection: Connection,
     private readonly inventoryService: InventoryService,
     private readonly productionTracking: ProductionTrackingService,
@@ -155,33 +179,67 @@ export class OrderService {
     const total = Math.max(0, subtotal - discount + shippingFee);
 
     // 3. Resolve multi-currency values
-    const chargeCurrency = dto.chargeCurrency ?? "NGN";
+    // Map the requested display currency to one the live gateways accept right now.
+    // A UK customer's GBP order is charged in USD until Stripe/Flutterwave is live.
+    const requestedCurrency = (dto.chargeCurrency ?? "NGN").toUpperCase();
+    const supportedCurrencies: string[] = this.config.get(
+      "payment.chargeCurrencies",
+      ["NGN", "USD"],
+    );
+    const fallbackCurrency: string = this.config.get(
+      "payment.chargeFallbackCurrency",
+      "USD",
+    );
+    const { chargeCurrency, wasRemapped } = resolveChargeCurrency(
+      requestedCurrency,
+      supportedCurrencies,
+      fallbackCurrency,
+    );
+    if (wasRemapped) {
+      this.logger.log(
+        `Currency remapped: ${requestedCurrency} -> ${chargeCurrency} (not in CHARGE_CURRENCIES)`,
+      );
+    }
     const isNgn = chargeCurrency === "NGN";
-
-    if (!isNgn && !dto.fxRateSnapshot) {
+    if (!isNgn && !wasRemapped && !dto.fxRateSnapshot) {
       throw new BadRequestException(
         "fxRateSnapshot is required for non-NGN orders. " +
           "The frontend must supply the rate and buffer from the CurrencyProvider context.",
       );
     }
-
-    // ngnTotal in kobo (100 kobo = â‚¦1)
+    // ngnTotal in kobo (100 kobo = 1 naira)
     const ngnTotal = Math.round(total * 100);
-
     let chargeTotal: number;
     let fxRate = 1;
     let fxBuffer = 0;
-
+    let resolvedChargeCurrency = chargeCurrency;
     if (isNgn) {
       chargeTotal = ngnTotal;
-    } else {
-      // Use the client-provided snapshot â€” never re-fetch rates here
+    } else if (!wasRemapped) {
+      // Natively-supported currency -- use the locked snapshot exactly
       const { rate, buffer } = dto.fxRateSnapshot!;
       fxRate = rate;
       fxBuffer = buffer;
       chargeTotal = Math.ceil(ngnTotal * rate * (1 + buffer / 100));
+    } else {
+      // Remapped currency (e.g. GBP->USD): fetch the live rate from the DB.
+      const rateDoc = await this.fxRateModel
+        .findOne({ currency: chargeCurrency })
+        .lean<{ rate: number } | null>();
+      if (!rateDoc) {
+        this.logger.error(
+          `No FX rate for ${chargeCurrency} -- falling back to NGN`,
+        );
+        resolvedChargeCurrency = "NGN";
+        chargeTotal = ngnTotal;
+      } else {
+        fxBuffer = dto.fxRateSnapshot?.buffer ?? 2;
+        fxRate = rateDoc.rate;
+        chargeTotal = Math.ceil(ngnTotal * fxRate * (1 + fxBuffer / 100));
+      }
     }
-
+    // Use resolvedChargeCurrency in case DB rate lookup fell back to NGN
+    const finalChargeCurrency = resolvedChargeCurrency;
     const reservationExpiresAt = new Date(Date.now() + PRICE_LOCK_MS);
 
     // 4. Reserve stock + create order in a single Mongo transaction
@@ -213,9 +271,9 @@ export class OrderService {
               discountAmount: discount,
               total,
               // Legacy field kept in sync with chargeCurrency
-              currency: chargeCurrency,
+              currency: finalChargeCurrency,
               // Multi-currency fields
-              chargeCurrency,
+              chargeCurrency: finalChargeCurrency,
               ngnTotal,
               chargeTotal,
               fxRate,

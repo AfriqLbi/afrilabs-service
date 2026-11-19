@@ -14,13 +14,31 @@ import { GeoCurrencyService } from "./geo-currency.service";
 
 const STORED_RATES = [
   { currency: "NGN", rate: 1, refreshedAt: new Date(), source: "base" },
-  { currency: "USD", rate: 1 / 1550, refreshedAt: new Date(), source: "exchangerate.host" },
-  { currency: "GBP", rate: 1 / 1980, refreshedAt: new Date(), source: "exchangerate.host" },
+  {
+    currency: "USD",
+    rate: 1 / 1550,
+    refreshedAt: new Date(),
+    source: "exchangerate.host",
+  },
+  {
+    currency: "GBP",
+    rate: 1 / 1980,
+    refreshedAt: new Date(),
+    source: "exchangerate.host",
+  },
 ];
 
 const mockFxModel = {
-  find: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(STORED_RATES) }),
-  findOne: jest.fn().mockReturnValue({ select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(null) }) }),
+  find: jest
+    .fn()
+    .mockReturnValue({ lean: jest.fn().mockResolvedValue(STORED_RATES) }),
+  findOne: jest
+    .fn()
+    .mockReturnValue({
+      select: jest
+        .fn()
+        .mockReturnValue({ lean: jest.fn().mockResolvedValue(null) }),
+    }),
   bulkWrite: jest.fn().mockResolvedValue({}),
 };
 
@@ -45,10 +63,20 @@ const mockConfigService = {
 };
 
 function buildService(): GeoCurrencyService {
+  const mockCache = {
+    wrap: jest
+      .fn()
+      .mockImplementation(
+        async (_key: string, _ttl: number, fn: () => Promise<unknown>) => fn(),
+      ),
+    del: jest.fn().mockResolvedValue(undefined),
+    delByPattern: jest.fn().mockResolvedValue(undefined),
+  };
   return new GeoCurrencyService(
     mockFxModel as any,
     mockConfigService as any,
     mockCurrencyConfigService as any,
+    mockCache as any,
   );
 }
 
@@ -62,7 +90,9 @@ describe("GeoCurrencyService", () => {
     service = buildService();
     // Default: no stale rates
     mockFxModel.findOne.mockReturnValue({
-      select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(null) }),
+      select: jest
+        .fn()
+        .mockReturnValue({ lean: jest.fn().mockResolvedValue(null) }),
     });
     mockFxModel.find.mockReturnValue({
       lean: jest.fn().mockResolvedValue(STORED_RATES),
@@ -143,7 +173,9 @@ describe("GeoCurrencyService", () => {
     it("does NOT include staleRates field when rates are fresh", async () => {
       // findOne returns null → no stale doc found
       mockFxModel.findOne.mockReturnValue({
-        select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(null) }),
+        select: jest
+          .fn()
+          .mockReturnValue({ lean: jest.fn().mockResolvedValue(null) }),
       });
 
       const result = await service.getGeoContext("127.0.0.1");
@@ -179,7 +211,9 @@ describe("GeoCurrencyService", () => {
     it("enabledCurrencies reflects the CurrencyConfig document", async () => {
       const result = await service.getGeoContext("127.0.0.1");
 
-      expect(result.enabledCurrencies).toEqual(DEFAULT_CONFIG.enabledCurrencies);
+      expect(result.enabledCurrencies).toEqual(
+        DEFAULT_CONFIG.enabledCurrencies,
+      );
     });
 
     it("fxBuffer reflects the CurrencyConfig document", async () => {

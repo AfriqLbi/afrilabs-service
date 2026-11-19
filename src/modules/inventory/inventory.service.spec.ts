@@ -199,14 +199,22 @@ describe("InventoryService (BR-4: out-of-stock blocking)", () => {
   // ── releaseStock ──────────────────────────────────────────────────────────
 
   describe("releaseStock()", () => {
-    it("calls findByIdAndUpdate with $inc reserved: -qty", async () => {
+    it("calls findByIdAndUpdate with aggregation pipeline to decrement reserved (clamped to 0)", async () => {
       mockProductModel.findByIdAndUpdate.mockResolvedValue({});
 
       await service.releaseStock("prod-001", 2);
 
+      // Implementation uses an aggregation pipeline update ($set/$max) so that
+      // reserved never goes below 0 — not a classic $inc update.
       expect(mockProductModel.findByIdAndUpdate).toHaveBeenCalledWith(
         "prod-001",
-        expect.objectContaining({ $inc: { reserved: -2 } }),
+        expect.arrayContaining([
+          expect.objectContaining({
+            $set: expect.objectContaining({
+              reserved: expect.objectContaining({ $max: expect.anything() }),
+            }),
+          }),
+        ]),
         expect.anything(),
       );
     });
