@@ -412,6 +412,14 @@ export class OrderService {
       );
     }
 
+    // Persist the provider that will actually handle this payment so the admin
+    // can see it immediately — it gets confirmed/overwritten when the webhook fires.
+    if (provider) {
+      await this.orderModel.findByIdAndUpdate(order._id, {
+        paymentProvider: provider,
+      });
+    }
+
     return this.paymentRouter.initializePayment(order, provider);
   }
 
@@ -701,54 +709,54 @@ export class OrderService {
 
     // Active gateway verification — gives the confirm page a result even
     // when the webhook hasn't fired yet (e.g. dev tunnels, slow delivery).
+    // Try Paystack first (always), then fall back to the stored provider.
+    // This handles the case where paymentProvider was set to the wrong value
+    // at order creation time (e.g. flutterwave for a quote-zone order that
+    // was later paid via paystack).
     try {
       let gatewayStatus = "unknown";
+      let resolvedProvider = order.paymentProvider;
 
-      if (order.paymentProvider === "paystack") {
-        gatewayStatus =
-          await this.paymentService.verifyPaystackTransaction(ref);
-        // Paystack returns "success" for a confirmed charge
-        if (gatewayStatus === "success") {
-          const eventId = `active-verify:${ref}`;
-          const fullOrder = await this.orderModel.findOne({
-            paymentReference: ref,
-          });
-          if (fullOrder && fullOrder.status === "pending_payment") {
-            await this.markPaid(fullOrder._id.toString(), eventId);
-            for (const item of fullOrder.items) {
-              await this.inventoryService
-                .commitReservedStock(item.productId, item.qty)
-                .catch(() => {
-                  // Stock may already be committed by a concurrent webhook — safe to swallow
-                });
-            }
-          }
-        } else if (
-          gatewayStatus === "failed" ||
-          gatewayStatus === "abandoned"
-        ) {
-          await this.markFailed(order._id.toString()).catch(() => {});
-        }
+      // Always try Paystack first — it's the primary gateway.
+      // If it returns a known status, use that regardless of stored provider.
+      const paystackStatus =
+        await this.paymentService.verifyPaystackTransaction(ref);
+      if (
+        paystackStatus === "success" ||
+        paystackStatus === "failed" ||
+        paystackStatus === "abandoned"
+      ) {
+        gatewayStatus = paystackStatus;
+        resolvedProvider = "paystack";
       } else if (order.paymentProvider === "flutterwave") {
-        gatewayStatus =
+        // Only fall back to Flutterwave if Paystack has no record
+        const fwStatus =
           await this.paymentService.verifyFlutterwaveTransaction(ref);
-        // Flutterwave returns "successful"
-        if (gatewayStatus === "successful") {
-          const eventId = `active-verify:${ref}`;
-          const fullOrder = await this.orderModel.findOne({
-            paymentReference: ref,
-          });
-          if (fullOrder && fullOrder.status === "pending_payment") {
-            await this.markPaid(fullOrder._id.toString(), eventId);
-            for (const item of fullOrder.items) {
-              await this.inventoryService
-                .commitReservedStock(item.productId, item.qty)
-                .catch(() => {});
-            }
+        gatewayStatus = fwStatus;
+        resolvedProvider = "flutterwave";
+      }
+
+      if (gatewayStatus === "success" || gatewayStatus === "successful") {
+        const eventId = `active-verify:${ref}`;
+        const fullOrder = await this.orderModel.findOne({
+          paymentReference: ref,
+        });
+        if (fullOrder && fullOrder.status === "pending_payment") {
+          await this.markPaid(
+            fullOrder._id.toString(),
+            eventId,
+            resolvedProvider,
+          );
+          for (const item of fullOrder.items) {
+            await this.inventoryService
+              .commitReservedStock(item.productId, item.qty)
+              .catch(() => {
+                // Stock may already be committed by a concurrent webhook — safe to swallow
+              });
           }
-        } else if (gatewayStatus === "failed") {
-          await this.markFailed(order._id.toString()).catch(() => {});
         }
+      } else if (gatewayStatus === "failed" || gatewayStatus === "abandoned") {
+        await this.markFailed(order._id.toString()).catch(() => {});
       }
     } catch (err) {
       // Non-fatal: polling will retry; do not surface gateway errors to the customer

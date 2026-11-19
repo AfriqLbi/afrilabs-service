@@ -15,10 +15,7 @@ export interface CartLineWeight {
 }
 
 export type EstimateStatus =
-  | "CALCULATED"
-  | "QUOTE_REQUIRED"
-  | "PICKUP"
-  | "NO_ZONE";
+  "CALCULATED" | "QUOTE_REQUIRED" | "PICKUP" | "NO_ZONE";
 
 export interface EstimateResult {
   status: EstimateStatus;
@@ -61,10 +58,24 @@ export class ShippingResolverService {
     country: string,
     state?: string,
   ): Promise<ShippingZoneDocument | null> {
+    // Normalise to uppercase for case-insensitive matching.
+    // Zone countries are stored as ISO alpha-2 (e.g. "GB"); the address
+    // coming in from the frontend may be any case.
+    const countryUpper = country.trim().toUpperCase();
+    const stateUpper = state?.trim().toUpperCase();
+
     const candidates = await this.zones
       .find({
         isActive: true,
-        $or: [{ countries: country }, { isFallback: true }],
+        $or: [
+          // Case-insensitive country match via regex
+          {
+            countries: {
+              $elemMatch: { $regex: new RegExp(`^${countryUpper}$`, "i") },
+            },
+          },
+          { isFallback: true },
+        ],
       })
       .lean<ShippingZoneDocument[]>();
 
@@ -72,8 +83,11 @@ export class ShippingResolverService {
       if (z.isFallback) return 1;
       // Specific-country zone
       if (z.states?.length) {
-        // Has state restrictions — only matches if state is listed
-        return state && z.states.includes(state) ? 3 : -1;
+        // Has state restrictions — only matches if state is listed (case-insensitive)
+        return stateUpper &&
+          z.states.some((s) => s.trim().toUpperCase() === stateUpper)
+          ? 3
+          : -1;
       }
       // Whole-country zone
       return 2;
@@ -96,8 +110,7 @@ export class ShippingResolverService {
   chargeableWeightGrams(items: CartLineWeight[]): number {
     const actual = items.reduce((s, i) => s + i.weightGrams * i.qty, 0);
     const volumetric = items.reduce(
-      (s, i) =>
-        s + ((i.dims.l * i.dims.w * i.dims.h) / 5000) * 1000 * i.qty,
+      (s, i) => s + ((i.dims.l * i.dims.w * i.dims.h) / 5000) * 1000 * i.qty,
       0,
     );
     return Math.ceil(Math.max(actual, volumetric));
@@ -137,9 +150,10 @@ export class ShippingResolverService {
         zone,
         feeNgn: 0,
         source: "pickup",
-        etaDays: zone.etaMinDays != null && zone.etaMaxDays != null
-          ? [zone.etaMinDays, zone.etaMaxDays]
-          : undefined,
+        etaDays:
+          zone.etaMinDays != null && zone.etaMaxDays != null
+            ? [zone.etaMinDays, zone.etaMaxDays]
+            : undefined,
       };
     }
 
@@ -149,11 +163,15 @@ export class ShippingResolverService {
         status: "QUOTE_REQUIRED",
         zone,
         estimateRange: zone.estimateRange
-          ? { minNgn: zone.estimateRange.minNgn, maxNgn: zone.estimateRange.maxNgn }
+          ? {
+              minNgn: zone.estimateRange.minNgn,
+              maxNgn: zone.estimateRange.maxNgn,
+            }
           : undefined,
-        etaDays: zone.etaMinDays != null && zone.etaMaxDays != null
-          ? [zone.etaMinDays, zone.etaMaxDays]
-          : undefined,
+        etaDays:
+          zone.etaMinDays != null && zone.etaMaxDays != null
+            ? [zone.etaMinDays, zone.etaMaxDays]
+            : undefined,
       };
     }
 
@@ -168,9 +186,10 @@ export class ShippingResolverService {
         feeNgn: 0,
         source: "free_threshold",
         chargeableWeightGrams: grams,
-        etaDays: zone.etaMinDays != null && zone.etaMaxDays != null
-          ? [zone.etaMinDays, zone.etaMaxDays]
-          : undefined,
+        etaDays:
+          zone.etaMinDays != null && zone.etaMaxDays != null
+            ? [zone.etaMinDays, zone.etaMaxDays]
+            : undefined,
       };
     }
 
@@ -187,11 +206,15 @@ export class ShippingResolverService {
         status: "QUOTE_REQUIRED",
         zone,
         estimateRange: zone.estimateRange
-          ? { minNgn: zone.estimateRange.minNgn, maxNgn: zone.estimateRange.maxNgn }
+          ? {
+              minNgn: zone.estimateRange.minNgn,
+              maxNgn: zone.estimateRange.maxNgn,
+            }
           : undefined,
-        etaDays: zone.etaMinDays != null && zone.etaMaxDays != null
-          ? [zone.etaMinDays, zone.etaMaxDays]
-          : undefined,
+        etaDays:
+          zone.etaMinDays != null && zone.etaMaxDays != null
+            ? [zone.etaMinDays, zone.etaMaxDays]
+            : undefined,
       };
     }
 
@@ -201,9 +224,10 @@ export class ShippingResolverService {
       feeNgn,
       source: band ? "rate_card" : "flat_fee",
       chargeableWeightGrams: grams,
-      etaDays: zone.etaMinDays != null && zone.etaMaxDays != null
-        ? [zone.etaMinDays, zone.etaMaxDays]
-        : undefined,
+      etaDays:
+        zone.etaMinDays != null && zone.etaMaxDays != null
+          ? [zone.etaMinDays, zone.etaMaxDays]
+          : undefined,
     };
   }
 }
