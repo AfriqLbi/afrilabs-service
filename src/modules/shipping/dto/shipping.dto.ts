@@ -60,8 +60,10 @@ export class ShippingEstimateDto {
 
 export class SubmitQuoteDto {
   @ApiProperty({
-    example: 4500000,
-    description: "Shipping fee in minor units of the order currency",
+    example: 45.0,
+    description:
+      "Shipping fee in MAJOR units of the order currency (e.g. £45.00, not 4500p). " +
+      "Enter the exact amount you want to charge the customer — no conversion needed.",
   })
   @IsNumber({ allowNaN: false, allowInfinity: false })
   @IsPositive()

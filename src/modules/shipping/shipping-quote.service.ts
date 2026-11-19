@@ -135,22 +135,22 @@ export class ShippingQuoteService {
 
     try {
       await session.withTransaction(async () => {
-        // dto.amount is in minor units of order.chargeCurrency (e.g. EUR cents).
-        // chargeTotal is also in chargeCurrency minor units — add directly.
-        const newChargeTotal = (order.chargeTotal ?? 0) + dto.amount;
+        // dto.amount is in MAJOR units of order.chargeCurrency (e.g. £45.00, ₦12000).
+        // chargeTotal is stored in MINOR units (e.g. pence, kobo) — multiply by 100 to add.
+        const amountMinor = Math.round(dto.amount * 100);
+        const newChargeTotal = (order.chargeTotal ?? 0) + amountMinor;
 
-        // Convert the admin-entered chargeCurrency amount back to NGN naira
-        // so shippingFee is stored in the same unit as the rest of the order
-        // (NGN naira, matching how createOrder stores it from the rate card).
-        // For NGN orders fxRate=1, fxBuffer=0 → result is dto.amount / 100 naira.
+        // Convert the major-unit amount back to NGN naira for shippingFee storage.
+        // shippingFee is stored in NGN naira throughout the order (same unit as order.total).
+        // Formula: ngnNaira = majorUnits / (fxRate × (1 + fxBuffer/100))
+        //   For NGN: fxRate=1, fxBuffer=0  → ngnNaira = dto.amount  (naira already)
+        //   For GBP: fxRate≈0.00051        → ngnNaira = £45 / 0.00051 ≈ ₦88,235
         const fxRate = order.fxRate ?? 1;
         const fxBuffer = order.fxBuffer ?? 0;
-        // chargeMinorUnits = ngnNaira × 100 × rate × (1 + buf/100)
-        // → ngnNaira = chargeMinorUnits / (100 × rate × (1 + buf/100))
         const shippingFeeNgnNaira =
           fxRate > 0
-            ? dto.amount / (100 * fxRate * (1 + fxBuffer / 100))
-            : dto.amount / 100;
+            ? dto.amount / (fxRate * (1 + fxBuffer / 100))
+            : dto.amount;
 
         updated = (await this.orderModel.findByIdAndUpdate(
           orderId,
@@ -161,15 +161,12 @@ export class ShippingQuoteService {
             shippingFeeSource: "admin_quote",
             chargeTotal: newChargeTotal,
             reservationExpiresAt: validUntil,
-            // Replace the whole shippingQuote subdocument in one operation.
-            // Using dot-notation on a null field causes a MongoDB error:
-            // "Cannot create field 'x' in element {shippingQuote: null}"
             shippingQuote: {
               requestedAt: order.shippingQuote?.requestedAt ?? new Date(),
               quotedAt: new Date(),
               quotedBy: new Types.ObjectId(actorId),
               currency: dto.currency,
-              amount: dto.amount,
+              amount: amountMinor, // store in minor units for consistency with chargeTotal
               carrier: dto.carrier ?? null,
               etaDays: dto.etaDays ?? null,
               note: dto.note ?? null,
